@@ -1,4 +1,3 @@
 opencv-python>=4.12
 numpy>=2.2.6
-# -e git+https://github.com/JepEtau/hutils.git@main#egg=hutils
 -e ../hutils

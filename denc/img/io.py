@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import cv2
 import glob
-from hutils import absolute_path, path_split
+from hytils import absolute_path, path_split
 import multiprocessing
 import numpy as np
 import os

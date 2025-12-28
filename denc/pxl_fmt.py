@@ -1,5 +1,5 @@
 from enum import Enum
-from hutils import red, lightgreen, darkgrey
+from hytils import red, lightgreen, darkgrey
 import re
 import subprocess
 

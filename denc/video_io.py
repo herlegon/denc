@@ -1,6 +1,6 @@
 from __future__ import annotations
 from fractions import Fraction
-from hutils import (
+from hytils import (
     absolute_path,
     path_split,
     lightcyan,

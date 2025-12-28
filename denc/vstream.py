@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
-from hutils import path_split
+from hytils import path_split
 import math
 import numpy as np
 import os

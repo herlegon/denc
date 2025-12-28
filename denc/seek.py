@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from hutils import red
+from hytils import red
 import re
 from typing import TYPE_CHECKING, Optional
 
