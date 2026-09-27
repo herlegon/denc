@@ -37,6 +37,7 @@
     },
     "python.analysis.extraPaths": [
         "../hutils",
+        "../hinstall",
     ],
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {

@@ -1,4 +1,4 @@
-from .utils.logger import denc_logger
+from .utils.dlogger import dlogger
 
 from .vcodec import VideoCodec, vcodec_to_extension
 from .vstream import FFmpegPreset
@@ -25,6 +25,7 @@ from .torch_tensor import (
     img_to_tensor,
     tensor_to_img,
 )
+from denc.utils.dlogger import dlogger
 
 __all__ = [
     "MediaStream",
@@ -56,5 +57,5 @@ __all__ = [
     "img_to_tensor",
     "tensor_to_img",
 
-    "denc_logger",
+    "dlogger",
 ]

@@ -4,7 +4,7 @@ import re
 import subprocess
 
 from .utils.tools import ffmpeg_exe
-from .utils.logger import denc_logger
+from .utils.dlogger import dlogger
 
 
 

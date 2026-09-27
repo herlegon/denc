@@ -1,33 +1,36 @@
+import logging
+
 from hytils import (
-    absolute_path,
     lightcyan,
     red,
     yellow,
 )
 import os
+from pathlib import Path
 from pprint import pprint
 import re
 import signal
 import sys
-
+sys.path.append(str(Path.cwd()))
 import denc
 from denc import (
     MediaStream,
     PIXEL_FORMATS,
     VideoCodec,
+    dlogger
 )
 
 
 def main():
 
-    in_video_dir: str = absolute_path(
-        os.path.join(__file__, os.pardir, os.pardir, os.pardir, "benchmark")
-    )
+    dlogger.setLevel(logging.DEBUG)
 
-    in_videos: list[str] = sorted(
+    in_video_dir: Path = Path(__file__).resolve().parents[3] / "video_patterns"
+
+    in_videos: list[Path] = sorted(
         [
             f
-            for f in os.listdir(in_video_dir)
+            for f in in_video_dir.iterdir()
             # if f.endswith(".mkv") or f.endswith(".mxf")
             # if "smpte" in f
             # if f.endswith(".mxf")
@@ -49,7 +52,7 @@ def main():
     )
 
     for f in in_videos:
-        in_video_fp = os.path.join(in_video_dir, f)
+        in_video_fp: Path = in_video_dir / f
         print(lightcyan(f"{f}"), end='')
 
 
@@ -57,6 +60,7 @@ def main():
             media: MediaStream = denc.open(in_video_fp)
             print(f"\t{media.video.pipe_format}", end='\t')
             # pprint(media.video)
+
         except Exception as e:
             print(red(f"\n\t{e}"))
             # media: MediaStream = denc.open(in_video_fp)
@@ -71,6 +75,7 @@ def main():
             _pix_fmt = 'rgba48le' if pix_fmt == 'rgba48' else _pix_fmt
             try:
                 nc = PIXEL_FORMATS[pix_fmt]['nc']
+
             except Exception as e:
                 print(red(f"{type(e)}. Not found:"), pix_fmt)
                 pprint(media.video)
@@ -113,6 +118,7 @@ def main():
                 if media.video.color_range is not None:
                     print(red("Error: color_range"), f"{media.video.color_range}, must be {color_range}")
                     pprint(media.video)
+
             else:
                 try:
                     if media.video.color_range.value != color_range:

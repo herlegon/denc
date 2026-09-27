@@ -1,4 +1,4 @@
-from hytils import absolute_path
+from pathlib import Path
 import multiprocessing
 import os
 from pprint import pprint
@@ -14,7 +14,7 @@ def main():
     cpu_count: int = int(3 * multiprocessing.cpu_count() / 4)
 
     # a list of images, limit to 20 images
-    in_img_dir: str = absolute_path(f"~/z-personnel/mco/imgs/ep10_226_lr_j")
+    in_img_dir: Path = Path(f"~/z-personnel/mco/imgs/ep10_226_lr_j")
     in_img_fp: list[str] = sorted(
         [os.path.join(in_img_dir, f) for f in os.listdir(in_img_dir) if f.endswith(".png")]
     )

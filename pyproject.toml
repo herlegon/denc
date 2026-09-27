@@ -16,30 +16,20 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.14",
 ]
 keywords = ["ffmpeg", "video", "audio", "media-processing"]
 dependencies = [
     "numpy>=2.2.6",
     "opencv-python>=4.12",
+    "hytils",
 ]
 
-# [project.optional-dependencies]
-# dev = [
-#     "pytest>=6.0",
-#     "black",
-#     "flake8",
-#     "mypy",
-# ]
-# docs = [
-#     "sphinx",
-#     "sphinx-rtd-theme",
-# ]
-
 [project.urls]
-Homepage = "https://github.com/JepEtau/denc"
-Documentation = "https://github.com/JepEtau/denc/README.md"
-Repository = "https://github.com/JepEtau/denc"
-"Bug Tracker" = "https://github.com/JepEtau/denc/issues"
+Homepage = "https://github.com/herlegon/denc"
+Documentation = "https://github.com/herlegon/denc/README.md"
+Repository = "https://github.com/herlegon/denc"
+"Bug Tracker" = "https://github.com/herlegon/denc/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

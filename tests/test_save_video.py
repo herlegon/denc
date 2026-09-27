@@ -23,7 +23,7 @@ from denc import (
     ColorSpace,
     FFmpegPreset,
     img_to_tensor,
-    denc_logger,
+    dlogger,
     vcodec_to_extension,
 )
 import torch
@@ -55,7 +55,7 @@ def generate_filename(media: MediaStream) -> str:
 
 def main():
     # denc_logger.addHandler(logging.StreamHandler(sys.stdout))
-    denc_logger.setLevel("DEBUG")
+    dlogger.setLevel("DEBUG")
 
     cpu_count: int = int(3 * multiprocessing.cpu_count() / 4)
 

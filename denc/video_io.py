@@ -1,14 +1,16 @@
 from __future__ import annotations
 from fractions import Fraction
+from pathlib import Path
 from hytils import (
     absolute_path,
     path_split,
     lightcyan,
     red,
+    yellow,
 )
 import json
 import os
-from pprint import pprint
+from pprint import pformat, pprint
 import subprocess
 from warnings import warn
 
@@ -25,39 +27,39 @@ from .utils.tools import ffprobe_exe
 from .utils.time_conversions import FrameRate
 from .vcodec import VideoCodec, supported_video_exts, CODEC_PROFILE
 from .vstream import FieldOrder, OutVideoStream
+from .utils.dlogger import dlogger
 
 
-
-def probe_media_file(media_filepath: str):
+def probe_media_file(media_filepath: Path):
     ffprobe_command = [
         ffprobe_exe,
         "-v", "error",
         '-show_format',
         '-show_streams',
         '-of','json',
-        media_filepath
+        str(media_filepath)
     ]
     process = subprocess.run(ffprobe_command, stdout=subprocess.PIPE)
     return json.loads(process.stdout.decode('utf-8'))
 
 
 
-def open(filepath: str, verbose: bool = False) -> MediaStream | None:
-    in_video_fp: str = absolute_path(filepath)
-    if verbose:
-        print(lightcyan(f"Input video file:"), f"{in_video_fp}")
-    if not os.path.isfile(in_video_fp):
+def open(filepath: Path) -> MediaStream | None:
+    in_video_fp: Path = absolute_path(filepath)
+    dlogger.debug(f"{lightcyan(f"Input video file:")} {in_video_fp}")
+    if not in_video_fp.is_file(follow_symlinks=True):
         raise ValueError(red(f"Error: missing input file {in_video_fp}"))
 
-    extension = path_split(in_video_fp)[-1]
+    extension = in_video_fp.suffix
     if extension not in supported_video_exts:
-        raise ValueError(f"Not a supported video file (extension={extension})")
+        raise NotImplementedError(f"Not a supported video file (extension={extension})")
 
     try:
         media_info = probe_media_file(in_video_fp)
         duration_s = float(media_info['format']['duration'])
+
     except:
-        pprint(media_info)
+        dlogger.debug(pformat(media_info))
         raise ValueError(f"Failed to open {in_video_fp}")
 
     # Use the first video track
@@ -90,6 +92,7 @@ def open(filepath: str, verbose: bool = False) -> MediaStream | None:
         v = PIXEL_FORMATS[pix_fmt]
         is_supported = v['supported']
         shape = (v_stream['height'], v_stream['width'], v['nc'])
+
     except:
         print(pix_fmt)
         raise

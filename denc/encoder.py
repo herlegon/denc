@@ -29,7 +29,7 @@ from .vcodec import (
 )
 from .utils.np_dtypes import np_to_uint16, np_to_uint8
 from .utils.tools import ffmpeg_exe
-from .utils.logger import denc_logger
+from .utils.dlogger import dlogger
 from .torch_tensor import (
     np_to_torch_dtype,
     tensor_to_img,
@@ -215,7 +215,7 @@ def encoder_subprocess(
     # else:
     #     raise NotImplementedError(f"not supported: {pipe_pixel_format}")
 
-    denc_logger.info(f"""{purple("Encoder pipe:")}
+    dlogger.info(f"""{purple("Encoder pipe:")}
           vstream.pix_fmt: {vstream.pix_fmt.value}
           shape: {pipe.shape}
           dtype: {pipe.dtype}
@@ -302,7 +302,7 @@ def encoder_subprocess(
     ]
 
 
-    denc_logger.info(f"{purple("Encoder command:")} {' '.join(e_command)}")
+    dlogger.info(f"{purple("Encoder command:")} {' '.join(e_command)}")
     parent_dir: str = path_split(vstream.filepath)[0]
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
@@ -316,7 +316,7 @@ def encoder_subprocess(
             stderr=subprocess.STDOUT,
         )
     except Exception as e:
-        denc_logger.error(red(f"Unexpected error: {type(e)}"))
+        dlogger.error(red(f"Unexpected error: {type(e)}"))
         return None
 
     return e_subprocess
