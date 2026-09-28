@@ -27,7 +27,40 @@ do_cache = true
 filename = "ffmpeg-n9.0.2-10-g51c4a23d74-linux64-lgpl-9.0.tar.xz"
 
 
+# Python packages
+#===========================================================
+
+# Second pass
+[py_packages.delayed]
+do_cache = false
+
+# PyTorch
+[py_packages.delayed.torch.cuda]
+index-url = "https://download.pytorch.org/whl/cu132"
+torch = "2.14.0+cu132"
+torchvision = "0.29.0+cu132"
+
+[py_packages.delayed.torch.cpu]
+index-url = "https://download.pytorch.org/whl/cpu"
+torch = "2.14.0+cpu"
+torchvision = "0.29.0+cpu"
+
+[py_packages.delayed.torch.rocm]
+index-url = "https://download.pytorch.org/whl/rocm7.2"
+torch = "2.14.0+rocm7.2"
+torchvision = "0.29.0+rocm7.2"
+
+
+
 # Pretty names
 #===========================================================
 [packages.names]
 ffmpeg = "FFmpeg"
+
+[py_packages.names]
+nvidia-ml-py = "pyNVML"
+torch = "PyTorch"
+torch-cuda = "PyTorch (CUDA)"
+torch-cpu = "PyTorch (CPU)"
+torch-rocm = "PyTorch (ROCm)"
+torchvision = "TorchVision"

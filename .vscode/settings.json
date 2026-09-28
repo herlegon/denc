@@ -36,7 +36,8 @@
         ]
     },
     "python.analysis.extraPaths": [
-        "../hutils",
+        "../hytils",
+        "../hsys",
         "../hinstall",
     ],
     "python.analysis.typeCheckingMode": "basic",

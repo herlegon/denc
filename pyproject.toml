@@ -1,7 +1,3 @@
-[build-system]
-requires = ["setuptools >= 77.0.3", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "denc"
 version = "0.1"
@@ -10,19 +6,35 @@ authors = [
 ]
 description = "A Python wrapper for FFmpeg with frame-level control and real-time streaming"
 readme = "README.md"
-requires-python = ">= 3.12"
+requires-python = ">= 3.14"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.14",
 ]
 keywords = ["ffmpeg", "video", "audio", "media-processing"]
 dependencies = [
+    # requirements-common.txt
     "numpy>=2.2.6",
     "opencv-python>=4.12",
     "hytils",
+    "hsys",
+    "hinstall",
+]
+
+[project.optional-dependencies]
+# pip install .[release]
+release = [
+    "hytils @ git+https://github.com/herlegon/hytils.git",
+    "hsys @ git+https://github.com/herlegon/hsys.git",
+    "hinstall @ git+https://github.com/herlegon/hinstall.git",
+]
+# pip install -e .[dev]  +  pip install -e ../hytils ../hsys ../hinstall
+dev = [
+    "hytils",
+    "hsys",
+    "hinstall",
 ]
 
 [project.urls]
@@ -31,6 +43,10 @@ Documentation = "https://github.com/herlegon/denc/README.md"
 Repository = "https://github.com/herlegon/denc"
 "Bug Tracker" = "https://github.com/herlegon/denc/issues"
 
+[build-system]
+requires = ["setuptools >= 84.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["denc*"]
@@ -38,9 +54,9 @@ exclude = ["tests*"]
 
 [tool.black]
 line-length = 90
-target-version = ['py312']
+target-version = ['py314']
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
