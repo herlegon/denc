@@ -1,51 +1,31 @@
 import os
+from pathlib import Path
 import sys
 from stat import S_IEXEC
 
-# external_dir: str = absolute_path(
-#         os.path.join(
-#         os.path.dirname(os.path.realpath(__file__)),
-#         os.pardir,
-#         "external",
-#     )
-# )
 
-# if not os.path.exists(external_dir):
-#     os.makedirs(external_dir, exist_ok=True)
-
-# if not os.path.exists(os.path.join(external_dir, "ffmpeg")):
-#     os.makedirs(os.path.join(external_dir, "ffmpeg"), exist_ok=True)
-
-# if sys.platform == "win32":
-#     ffmpeg_exe = os.path.join(external_dir, "ffmpeg", "ffmpeg.exe")
-#     ffprobe_exe = os.path.join(external_dir, "ffmpeg", "ffprobe.exe")
-#     python_exe = "python.exe"
-#     ffprobe_exe = absolute_path(ffprobe_exe)
-#     ffmpeg_exe = absolute_path(ffmpeg_exe)
-
-# elif sys.platform == "linux":
-#     ffmpeg_exe = os.path.join(external_dir, "ffmpeg", "ffmpeg")
-#     ffprobe_exe = os.path.join(external_dir, "ffmpeg", "ffprobe")
-#     python_exe = "python"
-
-#     ffprobe_exe = absolute_path(ffprobe_exe)
-#     ffmpeg_exe = absolute_path(ffmpeg_exe)
-#     try:
-#         for f in [ffmpeg_exe, ffprobe_exe]:
-#             st_mode = os.stat(f).st_mode
-#             if oct(st_mode & 0o100) == "0o0":
-#                 os.chmod(f, st_mode |S_IEXEC)
-#     except:
-#         pass
-
-# else:
-#     sys.exit("[E] Platform/system not supported.")
+ORGANIZATION = "herlegon"
 
 if sys.platform == "win32":
-    ffmpeg_exe: str = "ffmpeg.exe"
-    ffprobe_exe: str = "ffprobe.exe"
+    base = Path(os.environ.get('LOCALAPPDATA', Path.home() / "AppData" / "Local"))
+    ffmpeg_dir = base / ORGANIZATION / "ffmpeg" / "bin"
+    ffmpeg_exe: str = str(ffmpeg_dir / "ffmpeg.exe")
+    ffprobe_exe: str = str(ffmpeg_dir / "ffprobe.exe")
 
-if sys.platform == "linux":
-    ffmpeg_exe: str = "ffmpeg"
-    ffprobe_exe: str = "ffprobe"
+elif sys.platform == "linux":
+    base = Path(os.environ.get('XDG_DATA_HOME', Path.home() / ".local" / "share"))
+    ffmpeg_dir = base / ORGANIZATION / "ffmpeg" / "bin"
+    ffmpeg_exe: str = str(ffmpeg_dir / "ffmpeg")
+    ffprobe_exe: str = str(ffmpeg_dir / "ffprobe")
 
+    # Make them executable if not already done
+    try:
+        for f in [ffmpeg_exe, ffprobe_exe]:
+            st_mode = os.stat(f).st_mode
+            if oct(st_mode & 0o100) == "0o0":
+                os.chmod(f, st_mode |S_IEXEC)
+    except:
+        pass
+
+else:
+    raise NotImplementedError(f"{sys.platform} is not a supported platform")
