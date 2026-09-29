@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from fractions import Fraction
-from hytils import path_split
+from hytils import path_split, red
 import math
 import numpy as np
 import os
@@ -113,7 +113,7 @@ class VideoStream:
 
 
     def __post_init__(self):
-        pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
+        pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt]['pipe_pxl_fmt']
         if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
             pipe_dtype: torch.dtype = torch.uint8
         elif pipe_pixel_format in (PixFmt.RGB48, PixFmt.RGBA48):

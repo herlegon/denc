@@ -7,7 +7,7 @@ from hytils import (
 )
 import os
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat, pprint
 import re
 import signal
 import sys
@@ -25,7 +25,7 @@ def main():
 
     dlogger.setLevel(logging.DEBUG)
 
-    in_video_dir: Path = Path(__file__).resolve().parents[3] / "video_patterns"
+    in_video_dir: Path = Path(__file__).resolve().parents[2] / "video-patterns"
 
     in_videos: list[Path] = sorted(
         [
@@ -40,35 +40,45 @@ def main():
     )
 
     filename_pattern = re.compile(r"""
-        ^([^_]+)            # codec
-        _(\d+)x(\d+)        # resolution width x height
-        _([a-z0-9]+)        # pixel format
-        (?:_([a-z0-9]+))?   # colorspace
-        (?:_([a-z0-9]+))?   # (pal / ntsc / none)
-        _(full|limited)     # range
-        _([a-z0-9]+)        # pattern
-        \.                 # extension
+        ^([^_]+)            # pattern name (ex: smpte)
+        _([^_]+)            # codec (ex: DNxHR)
+        _(\d+)x(\d+)        # resolution width x height (ex: 1280x720)
+        _([a-z0-9]+)        # pixel format (ex: yuv422p10le)
+        (?:_([a-z0-9]+))?   # colorspace (ex: bt709)
+        (?:_([a-z0-9]+))?   # (pal / ntsc / none / optional)
+        _(full|limited)     # range (ex: limited)
+        (?:_([a-z0-9]+))?   # pattern optional (si présent)
+        \.([a-z0-9]+)$      # extension (ex: mxf)
         """, re.VERBOSE
     )
 
     for f in in_videos:
         in_video_fp: Path = in_video_dir / f
-        print(lightcyan(f"{f}"), end='')
-
+        dlogger.info(lightcyan(f"{f.name}"))
 
         try:
             media: MediaStream = denc.open(in_video_fp)
-            print(f"\t{media.video.pipe_format}", end='\t')
-            # pprint(media.video)
+            dlogger.info(f"\t{media.video.pipe_format}")
+            dlogger.info(pformat(media.video))
 
         except Exception as e:
-            print(red(f"\n\t{e}"))
-            # media: MediaStream = denc.open(in_video_fp)
+            dlogger.error(red(f"\t{e}"))
             continue
-        print()
 
-        if result := re.search(filename_pattern, f):
-            file_codec, width, height, pix_fmt, color_space, ntsc_pal, color_range, video_pattern = result.groups()
+        if result := re.search(filename_pattern, str(f.name)):
+            result: re.Match
+            (
+                pattern_name,
+                file_codec,
+                width,
+                height,
+                pix_fmt,
+                color_space,
+                standard,  # pal/ntsc/none
+                color_range,
+                pattern,
+                ext,
+            ) = result.groups()
 
             # Pixel Format
             _pix_fmt: str = 'rgb48le' if pix_fmt == 'rgb48' else pix_fmt
@@ -77,7 +87,7 @@ def main():
                 nc = PIXEL_FORMATS[pix_fmt]['nc']
 
             except Exception as e:
-                print(red(f"{type(e)}. Not found:"), pix_fmt)
+                dlogger.error(red(f"{type(e)}. Not found:"), pix_fmt)
                 pprint(media.video)
                 sys.exit()
 
@@ -93,49 +103,53 @@ def main():
 
             # Tests:
             if _codec.lower() != file_codec.lower():
-                print(red("Error: codec differs"), f"{media.video.codec}, must be {file_codec}")
+                dlogger.error(red("Error: codec differs") + f"{media.video.codec}, must be {file_codec}")
                 pprint(media.video)
                 sys.exit()
 
             if media.video.shape != shape:
-                print(red("Error: shape"), f"{media.video.shape}, must be {shape}")
+                dlogger.error(red("Error: shape") + f"{media.video.shape}, must be {shape}")
 
             if media.video.color_space != color_space:
                 if _codec == VideoCodec.FFV1.value.lower():
                     if color_space == 'gbr':
-                        print(red("Error: color_space"), f"must be GBR for FFv1 codec")
+                        dlogger.error(red("Error: color_space") + f"must be GBR for FFv1 codec")
 
                 else:
                     if color_space == 'unknown' and media.video.color_space is not None:
-                        print(red("Error: unknown color_space, found"), f"{media.video.color_space}")
+                        dlogger.error(red("Error: unknown color_space, found") + f"{media.video.color_space}")
+                        sys.exit()
                     else:
-                        print(red("Error: color_space"), f"{media.video.color_space}, must be {color_space}")
+                        dlogger.error(red("Error: color_space") + f"{media.video.color_space}, must be {color_space}")
+                        sys.exit()
                 # pprint(media.video)
                 # sys.exit()
 
             # _color_range = media.video.color_range.value
             if _codec == VideoCodec.PRORES.value.lower():
                 if media.video.color_range is not None:
-                    print(red("Error: color_range"), f"{media.video.color_range}, must be {color_range}")
+                    dlogger.error(red("Error: color_range") + f"{media.video.color_range}, must be {color_range}")
                     pprint(media.video)
+                    sys.exit()
 
             else:
                 try:
                     if media.video.color_range.value != color_range:
-                        print(red("Error: color_range"), f"{media.video.color_range}, must be {color_range}")
+                        dlogger.error(red("Error: color_range") + f"{media.video.color_range.value}, must be {color_range}")
                         pprint(media.video)
-                        # sys.exit()
+                        sys.exit()
 
                 except Exception as e:
                     print(e)
-                    print(red("Error: color_range"), f"{media.video.color_range}, must be {color_range}")
+                    dlogger.error(red("Error: color_range") + f"{media.video.color_range}, must be {color_range}")
                     # pprint(media.video)
-                    # sys.exit()
+                    sys.exit()
 
+            dlogger.info(f"    OK")
         else:
-            print(yellow("  can't verify using the filename"))
+            raise ValueError(red("  can't verify using the filename"))
 
-    print("Ended.")
+    dlogger.info("Ended.")
 
 
 if __name__ == "__main__":

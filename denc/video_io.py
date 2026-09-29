@@ -45,8 +45,9 @@ def probe_media_file(media_filepath: Path):
 
 
 def open(filepath: Path) -> MediaStream | None:
-    in_video_fp: Path = absolute_path(filepath)
+    in_video_fp: Path = filepath.resolve()
     dlogger.debug(f"{lightcyan(f"Input video file:")} {in_video_fp}")
+
     if not in_video_fp.is_file(follow_symlinks=True):
         raise ValueError(red(f"Error: missing input file {in_video_fp}"))
 
@@ -61,6 +62,8 @@ def open(filepath: Path) -> MediaStream | None:
     except:
         dlogger.debug(pformat(media_info))
         raise ValueError(f"Failed to open {in_video_fp}")
+
+    dlogger.debug(pformat(media_info))
 
     # Use the first video track
     v_stream: dict[str, str] = [
@@ -97,9 +100,9 @@ def open(filepath: Path) -> MediaStream | None:
         print(pix_fmt)
         raise
         pass
+
     if not is_supported:
         warn(yellow(f"{pix_fmt} is not supported"))
-
 
     field_order = FieldOrder._value2member_map_[v_stream.get('field_order', 'progressive')]
 
