@@ -6,8 +6,9 @@ import re
 import signal
 import subprocess
 import sys
-
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from hytils import lightcyan
+from denc.utils.tools import ffmpeg_exe
 
 
 class PatternName(Enum):
@@ -135,7 +136,6 @@ def build_ffmpeg_command(
     color_range: ColorRange = None,
     add_grain: bool = True,
     overwrite: bool = True,
-    ffmpeg_exe: str = "ffmpeg",
 ) -> tuple[Path, list[str]]:
 
     # Pattern
@@ -254,7 +254,6 @@ def main():
     )
     arguments = parser.parse_args()
 
-    ffmpeg_exe = "ffmpeg"
     if arguments.out_dir:
         out_dir: Path = Path(arguments.out_dir).resolve()
     else:
@@ -297,7 +296,6 @@ def main():
                         pix_fmt=pix_fmt,
                         profile=default_profile,
                         add_grain=True,
-                        ffmpeg_exe=ffmpeg_exe
                     )
                 )
                 scenarii[fp] = command
