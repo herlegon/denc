@@ -37,7 +37,7 @@ def img_info(img: np.ndarray | torch.Tensor) -> str:
     return f"{w}x{h}, {img.dtype}, {range_str}"
 
 
-def load_image(filepath: Path | str, dtype: np.dtype = np.uint8) -> np.ndarray:
+def load_image(filepath: Path, dtype: np.dtype = np.uint8) -> np.ndarray:
     """Load an image
     """
     img: np.ndarray = cv2.imdecode(
@@ -47,7 +47,7 @@ def load_image(filepath: Path | str, dtype: np.dtype = np.uint8) -> np.ndarray:
     return img if dtype == np.uint8 else np_to_float32(img)
 
 
-def load_image_fp32(filepath: Path | str) -> np.ndarray:
+def load_image_fp32(filepath: Path) -> np.ndarray:
     return np_to_float32(
         cv2.imdecode(
             np.fromfile(filepath, dtype=np.uint8),
@@ -56,7 +56,7 @@ def load_image_fp32(filepath: Path | str) -> np.ndarray:
     )
 
 
-def write_image(filepath: Path | str, img: np.ndarray) -> None:
+def write_image(filepath: Path, img: np.ndarray) -> None:
     # Support uint8 only as these functions aare used for debugging purpose
     # no nedd to improve this
     out_dir, _, extension = path_split(filepath)
@@ -70,7 +70,7 @@ def write_image(filepath: Path | str, img: np.ndarray) -> None:
 
 
 def load_images(
-    filepaths: list[Path | str],
+    filepaths: list[Path],
     dtype: np.dtype = Literal[np.uint8, np.float32],
     cpu_count: int = 4,
 ) -> list[np.ndarray]:
@@ -80,6 +80,7 @@ def load_images(
     load_img_function = load_image_fp32 if dtype == np.float32 else load_image
     if len(filepaths) == 1:
         imgs = [load_img_function(filepaths[0])]
+
     with ThreadPoolExecutor(max_workers=min(CPU_COUNT, cpu_count)) as executor:
         for img in executor.map(load_img_function, filepaths):
             imgs.append(img)
@@ -148,7 +149,7 @@ def write_tensor(
 
 
 def load_image_as_tensor(
-    filepath: Path | str,
+    filepath: Path,
     dtype: torch.dtype = torch.float32
 ) -> Tensor:
     img: np.ndarray = cv2.imdecode(

@@ -1,24 +1,20 @@
 from pathlib import Path
 import multiprocessing
 import os
-from pprint import pprint
 import signal
+import sys
 import time
-
 import numpy as np
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+
 import denc
-
-
 
 def main():
     cpu_count: int = int(3 * multiprocessing.cpu_count() / 4)
 
     # a list of images, limit to 20 images
-    in_img_dir: Path = Path(f"~/z-personnel/mco/imgs/ep10_226_lr_j")
-    in_img_fp: list[str] = sorted(
-        [os.path.join(in_img_dir, f) for f in os.listdir(in_img_dir) if f.endswith(".png")]
-    )
-    in_img_fp = in_img_fp[:20]
+    in_img_dir: Path = Path(__file__).resolve().parents[2] / "imgs" / "denc" / "in"
+    in_img_fp = sorted(Path(in_img_dir).glob("*.png"))[:20]
     # pprint(in_img_fp)
 
 
