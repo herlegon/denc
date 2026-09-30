@@ -360,7 +360,7 @@ def new(filepath: str = "", preset = None) -> MediaStream:
         frame_rate_r=FrameRate(25, 1),
         frame_rate_avg=FrameRate(25, 1),
         frame_count=0,
-        duration=0,
+        duration=Decimal(),
     )
 
     mstream: MediaStream=MediaStream(

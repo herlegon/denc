@@ -258,7 +258,8 @@ def encoder_subprocess(
     # colorspace, color range
     colorspace: list[str] = []
     v: str | None
-    k, v = 'color_range', vstream.color_range
+    k, v = 'color_range', vstream.color.matrix.value
+    print(v)
     if (
         k not in codec_params
         and v is not None and v.lower() not in ("unknown", "unspecified")
@@ -298,12 +299,12 @@ def encoder_subprocess(
         *codec_params,
         *colorspace,
         # *metadata,
-        vstream.filepath, "-y"
+        str(vstream.filepath), "-y"
     ]
 
 
     dlogger.info(f"{purple("Encoder command:")} {' '.join(e_command)}")
-    parent_dir: str = path_split(vstream.filepath)[0]
+    parent_dir: str = vstream.filepath.parent
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
 

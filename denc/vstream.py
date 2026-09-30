@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
+from pathlib import Path
 from hytils import path_split, red
 import math
 import numpy as np
@@ -68,7 +69,7 @@ class DecoderResize:
 
 @dataclass
 class VideoStream:
-    filepath: str
+    filepath: Path
     codec: VideoCodec
 
     shape: FShape
@@ -111,7 +112,7 @@ class VideoStream:
 
 
     def __post_init__(self):
-        pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt]['pipe_pxl_fmt']
+        pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
         if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
             pipe_dtype: torch.dtype = torch.uint8
         elif pipe_pixel_format in (PixFmt.RGB48, PixFmt.RGBA48):
@@ -226,11 +227,10 @@ class OutVideoStream(VideoStream):
     @codec.setter
     def codec(self, codec: VideoCodec) -> None:
         self._codec = codec
-        if self.filepath:
-            directory, basename, _ = path_split(self.filepath)
-            self.filepath = os.path.join(
-                directory, f"{basename}{vcodec_to_extension[codec]}"
-            )
+        fp = self.filepath
+        if fp:
+            directory, basename = fp.parent, fp.name
+            self.filepath = directory / f"{basename}{vcodec_to_extension[codec]}"
             if self.parent is not None:
                 self.parent.filepath = self.filepath
 

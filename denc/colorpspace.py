@@ -53,10 +53,10 @@ not_supported_colorspace: dict[VideoCodec, list[ColorSpace]] = {
 
 @dataclass
 class ColorInfo:
-    matrix: str | None
-    primaries: str | None
-    transfer: str | None
-    range: ColorRange | None
+    matrix: str | ColorSpace | None = None
+    primaries: str | None = None
+    transfer: str | None = None
+    range: ColorRange | None = None
 
     @property
     def has_complete_color_info(self) -> bool:

@@ -1,19 +1,19 @@
 from argparse import ArgumentParser
+from decimal import Decimal
+from pathlib import Path
 from hytils import (
-    absolute_path,
     lightcyan
 )
-import logging
 import multiprocessing
 import os
 from pprint import pprint
-import re
 import signal
 import sys
 import time
 from typing import Any
 
 import numpy as np
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import denc
 from denc import (
@@ -45,7 +45,7 @@ def generate_filename(media: MediaStream) -> str:
         f"{w}x{h}",
         frame_rate_str,
         vstream.pix_fmt.value,
-        vstream.color_space.value,
+        vstream.color.matrix,
         f"crf{vstream.crf}",
         vstream.preset.value.lower(),
     ])) + vcodec_to_extension[vstream.codec]
@@ -76,19 +76,14 @@ def main():
 
 
     # a list of images
-    if sys.platform == 'linux':
-        in_img_dir: str = absolute_path(f"~/z-personnel/mco/imgs/ep10_226_lr_j")
-    else:
-        in_img_dir: str = absolute_path(f"N:\\imgs\\ep01_215_upscale_j")
-
-    in_img_fp: list[str] = sorted(
-        [os.path.join(in_img_dir, f) for f in os.listdir(in_img_dir) if f.endswith(".png")]
-    )
-    in_img_fp = in_img_fp[:50]
+    in_img_dir: Path = Path(__file__).resolve().parents[2] / "imgs" / "denc" / "in"
+    in_img_fp = sorted(Path(in_img_dir).glob("*.png"))[:50]
 
     start_time = time.time()
     in_images = denc.load_images(
-        filepaths=in_img_fp, cpu_count=cpu_count, dtype=np.float32
+        filepaths=in_img_fp,
+        cpu_count=cpu_count,
+        dtype=np.float32
     )
     elapsed = time.time() - start_time
     print(f"[np.float32] loaded {len(in_images)} images in {1000 * (elapsed):.01f}ms ({len(in_images)/elapsed:.01f}fps) (cpu_count={cpu_count})")
@@ -98,12 +93,11 @@ def main():
         for img in in_images
     ])
 
-
     # Write images as video
     print(lightcyan(f"h264"))
     out_media: MediaStream = denc.new()
     vstream = out_media.video
-    vstream.color_space = ColorSpace.REC709
+    vstream.color.matrix = ColorSpace.REC709
 
     default_settings: dict[str, Any] = {
         'codec': VideoCodec.H264,
@@ -189,9 +183,9 @@ def main():
 
     # frame rates
     if args.fps or all_tests:
-        for frame_rate in (25, 50, 23.976, 29.97, 47.952, 59.94):
+        for frame_rate in ("25", "50", "23.976", "29.97", "47.952", "59.94"):
         # for frame_rate in (59.94, ):
-            vstream.frame_rate = frame_rate
+            vstream.frame_rate = Decimal(frame_rate)
             out_media.filepath = generate_filename(out_media)
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
@@ -201,6 +195,7 @@ def main():
     # crf
     if args.crf or all_tests:
         for crf in range(15, 35, 8):
+            vstream.crf = crf
             out_media.filepath = generate_filename(out_media)
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
