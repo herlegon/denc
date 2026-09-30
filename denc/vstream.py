@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
 from hytils import path_split, red
@@ -11,6 +12,7 @@ from typing import Any, Literal, Optional, TYPE_CHECKING
 from warnings import warn
 
 from .colorpspace import (
+    ColorInfo,
     ColorRange,
     ColorSpace,
 )
@@ -67,7 +69,7 @@ class DecoderResize:
 @dataclass
 class VideoStream:
     filepath: str
-    codec: VideoCodec | str
+    codec: VideoCodec
 
     shape: FShape
 
@@ -84,7 +86,7 @@ class VideoStream:
     frame_rate_avg: FrameRate
 
     frame_count: int
-    duration: float
+    duration: Decimal
 
     pix_fmt: PixFmt
 
@@ -93,16 +95,12 @@ class VideoStream:
     sar: Fraction = Fraction(1, 1)
     dar: Fraction = Fraction(1, 1)
 
-    is_interlaced: bool = False
+    interlaced: bool = False
     field_order: FieldOrder = FieldOrder.PROGRESSIVE
 
     profile: Optional[str] = ""
 
-    color_range: Optional[ColorRange] = None
-    color_space: Optional[ColorSpace] = None
-    color_matrix: Optional[ColorSpace] = None
-    color_primaries: Optional[ColorSpace] = None
-    color_transfer: Optional[ColorSpace] = None
+    color: ColorInfo = field(default_factory=ColorInfo)
 
     metadata: Any = None
 

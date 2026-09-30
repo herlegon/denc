@@ -1,10 +1,12 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from enum import Enum
 
 from .vcodec import (
     VideoCodec
 )
 from .utils.utils import clean_str
+
 
 
 class ColorSpace(Enum):
@@ -17,9 +19,11 @@ class ColorSpace(Enum):
     BT2020C = "bt2020c"
 
 
+
 class ColorRange(str, Enum):
     LIMITED = "limited"
     FULL = "full"
+
 
 
 colorspace_to_params = {
@@ -36,6 +40,7 @@ colorspace_to_params.update({
 })
 
 
+
 not_supported_colorspace: dict[VideoCodec, list[ColorSpace]] = {
     VideoCodec.H264: [],
     VideoCodec.H265: [],
@@ -43,6 +48,24 @@ not_supported_colorspace: dict[VideoCodec, list[ColorSpace]] = {
     VideoCodec.DNXHR: [ColorSpace.REC601_PAL, ColorSpace.REC601_NTSC],
     VideoCodec.VP9: [],
 }
+
+
+
+@dataclass
+class ColorInfo:
+    matrix: str | None
+    primaries: str | None
+    transfer: str | None
+    range: ColorRange | None
+
+    @property
+    def has_complete_color_info(self) -> bool:
+        return (
+            self.matrix is not None
+            and self.primaries is not None
+            and self.transfer is not None
+            and self.range is not None
+        )
 
 
 def ffmpeg_colorspace_args(

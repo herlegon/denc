@@ -134,7 +134,7 @@ def build_ffmpeg_command(
     pattern_name: PatternName = PatternName.SMPTEHDBARS,
     colorspace: Colorspace | None = None,
     color_range: ColorRange = None,
-    add_grain: bool = True,
+    add_grain: bool = False,
     overwrite: bool = True,
 ) -> tuple[Path, list[str]]:
 
@@ -161,37 +161,76 @@ def build_ffmpeg_command(
     if profile:
         profile_args = ["-profile", profile]
 
+    # Pixel format
+    pixel_format = ["-pix_fmt", pix_fmt.value]
+
 
     # Colorspace
     colorspace_args: list[str] = []
+    colorspace_filter: list[str] = []
+
     if colorspace is not None:
         space, prim, trc = colorspace_to_params[colorspace]
+
         if vcodec == VideoCodec.H264:
             colorspace_args = [
                 "-x264-params",
-                f"colorspace={space}:colorprim={prim}:transfer={trc}"
-            ]
-            colorspace_args.extend([
+                f"colorspace={space}:colorprim={prim}:transfer={trc}",
                 "-colorspace", space,
                 "-color_primaries", prim,
-                "-color_trc", trc
-            ])
+                "-color_trc", trc,
+            ]
 
         elif vcodec == VideoCodec.H265:
             colorspace_args = [
                 "-x265-params",
-                f"colorprim={prim}:transfer={trc}:colormatrix={space}"
+                f"colorprim={prim}:transfer={trc}:colormatrix={space}",
             ]
 
         elif vcodec == VideoCodec.DNXHR:
-            colorspace_args = [
-                "-vf",
-                _clean_str(f"""
-                    setparams=colorspace={space}
-                        :color_primaries={prim}
-                        :color_trc={trc}
-                """),
+            colorspace_filter = [
+                f"setparams=colorspace={space}:color_primaries={prim}:color_trc={trc}"
             ]
+
+        if colorspace in (Colorspace.BT2020NC, Colorspace.BT2020C):
+            colorspace_filter.insert(0, f"format={pix_fmt.value}")
+            pixel_format = []
+
+    if colorspace_filter:
+        simple_filters.extend(["-vf", ",".join(colorspace_filter)])
+
+
+
+
+    # colorspace_args: list[str] = []
+    # if colorspace is not None:
+    #     space, prim, trc = colorspace_to_params[colorspace]
+    #     if vcodec == VideoCodec.H264:
+    #         colorspace_args = [
+    #             "-x264-params",
+    #             f"colorspace={space}:colorprim={prim}:transfer={trc}"
+    #         ]
+    #         colorspace_args.extend([
+    #             "-colorspace", space,
+    #             "-color_primaries", prim,
+    #             "-color_trc", trc
+    #         ])
+
+    #     elif vcodec == VideoCodec.H265:
+    #         colorspace_args = [
+    #             "-x265-params",
+    #             f"colorprim={prim}:transfer={trc}:colormatrix={space}"
+    #         ]
+
+    #     elif vcodec == VideoCodec.DNXHR:
+    #         colorspace_args = [
+    #             "-vf",
+    #             _clean_str(f"""
+    #                 setparams=colorspace={space}
+    #                     :color_primaries={prim}
+    #                     :color_trc={trc}
+    #             """),
+    #         ]
 
     # Color Range
     color_range_args: list[str] = []
@@ -205,8 +244,13 @@ def build_ffmpeg_command(
     ])
     if colorspace_args:
         filename += f"_{colorspace.value}"
+
     if color_range_args:
         filename += f"_{color_range.value}"
+
+
+    filename += f"_{int(duration * frame_rate)}"
+
     filename += vcodec_to_extension.get(vcodec, ".mkv")
     filepath: Path = out_dir / filename
 
@@ -219,9 +263,9 @@ def build_ffmpeg_command(
         "-f", "lavfi",
         "-i", pattern,
         *simple_filters,
+        *pixel_format,
         "-c:v", vcodec_to_ffmpeg_vcodec[vcodec],
         *profile_args,
-        "-pix_fmt", pix_fmt.value,
         *colorspace_args,
         *color_range_args,
         str(filepath),
@@ -230,8 +274,6 @@ def build_ffmpeg_command(
     ffmpeg_command = list([v for v in ffmpeg_command if v])
 
     return filepath, ffmpeg_command
-
-
 
 
 def main():
@@ -267,7 +309,7 @@ def main():
         "720x576",
         "1280x720",
         "1920x1080",
-        # "3840x2160",
+        "3840x2160",
     )
     codecs: list = list([e for e in VideoCodec])
     for c in (VideoCodec.VP9, VideoCodec.FFV1):
@@ -284,27 +326,40 @@ def main():
 
             default_profile = vcodec_default_profile.get(vcodec, "")
             for pix_fmt in pixfmts[vcodec]:
-                fp, command = (
-                    build_ffmpeg_command(
-                        out_dir=out_dir,
-                        size=resolution,
-                        duration=duration,
-                        pattern_name=PatternName.SMPTEHDBARS,
-                        colorspace=Colorspace.REC709,
-                        color_range=ColorRange.LIMITED,
-                        vcodec=vcodec,
-                        pix_fmt=pix_fmt,
-                        profile=default_profile,
-                        add_grain=True,
+                for color_space in Colorspace:
+
+                    if (
+                        vcodec == VideoCodec.H264
+                        and color_space in (Colorspace.BT2020C, Colorspace.BT2020NC)
+                    ):
+                        continue
+
+                    fp, command = (
+                        build_ffmpeg_command(
+                            out_dir=out_dir,
+                            size=resolution,
+                            duration=duration,
+                            pattern_name=PatternName.SMPTEHDBARS,
+                            colorspace=color_space,
+                            color_range=ColorRange.LIMITED,
+                            vcodec=vcodec,
+                            pix_fmt=pix_fmt,
+                            profile=default_profile,
+                            add_grain=False,
+                        )
                     )
-                )
                 scenarii[fp] = command
 
     os.makedirs(out_dir, exist_ok=True)
     fp: Path
     for fp, ffmpeg_command in scenarii.items():
         print(lightcyan(fp.name))
-        print(' '.join(ffmpeg_command))
+        # print(' '.join(ffmpeg_command))
+        for a in ffmpeg_command:
+            if a.startswith("-") or a.startswith("/"):
+                print(f"\n  ", end="")
+            print(f" {a}", end="")
+        print()
 
         ffmpeg_subprocess: subprocess.Popen | None = None
         try:

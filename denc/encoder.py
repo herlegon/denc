@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from hytils import purple
+from hytils import purple, red
 import numpy as np
 import os
 from pprint import pprint

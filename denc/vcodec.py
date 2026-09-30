@@ -37,6 +37,7 @@ class VideoCodec(Enum):
     H265 = "h265"
     FFV1 = "FFv1"
     DNXHR = "DNxHR"
+    DNXHD = "DNxHD"
     AV1 = "av1"
     VP9 = "VP9"
     PRORES = "ProRes"
@@ -54,6 +55,17 @@ class VideoCodec(Enum):
 
     H264_AMF = "h264_amf"
     HEVC_AMF = "hevc_amf"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            value_lower = value.lower()
+
+            for member in cls:
+                if member.value.lower() == value_lower:
+                    return member
+
+        return None
 
 
 vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
