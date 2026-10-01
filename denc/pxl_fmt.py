@@ -74,7 +74,7 @@ PIXEL_FORMATS = list_pixel_formats()
 
 
 # Debug
-if True:
+if False:
     for k, v in PIXEL_FORMATS.items():
         if v['supported']:
             msg: str = (

@@ -1,6 +1,6 @@
 from .utils.dlogger import dlogger
 
-from .vcodec import VideoCodec, vcodec_to_extension
+from .vcodec import VideoCodec, vcodec_to_extension, is_codec_supported
 from .vstream import FFmpegPreset
 from .pxl_fmt import PixFmt, PIXEL_FORMATS
 from .colorpspace import ColorRange, ColorSpace

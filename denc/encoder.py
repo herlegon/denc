@@ -14,6 +14,7 @@ from torch import Tensor
 from torch.cuda import StreamContext
 from typing import IO, TYPE_CHECKING
 
+from .colorpspace import ColorSpace, ffmpeg_colorspace_args, ffmpeg_color_range
 from .dh_transfers import dtoh_transfer
 from .pxl_fmt import PIXEL_FORMATS
 from .vstream import (
@@ -25,7 +26,11 @@ from .vstream import (
 
 from .vcodec import (
     vcodec_to_ffmpeg_vcodec,
-    vcodec_opts,
+    vcodec_output_opts,
+    codec_platform_check,
+    is_vaapi_codec,
+    is_nvenc_codec,
+    is_amf_codec,
 )
 from .utils.np_dtypes import np_to_uint16, np_to_uint8
 from .utils.tools import ffmpeg_exe
@@ -224,54 +229,87 @@ def encoder_subprocess(
         .replace("    ", " ")
     )
 
+    # Validate codec support on current platform
+    valid, msg = codec_platform_check(vstream.codec)
+    if not valid:
+        raise RuntimeError(msg)
+
     # Profiles
     profile: list[str] = []
     profile_value = vstream.profile
     if profile_value:
         profile = ["-profile:v", profile_value]
 
-    # Preset, CRF
+    # Preset: not applicable for AV1, VP9, PRORES, or any hw-accel encoder
     preset_crf: list[str] = []
-    if vstream.codec not in (
-        VideoCodec.AV1,
-        VideoCodec.VP9,
-        VideoCodec.PRORES,
-        VideoCodec.H264_NVENC,
-        VideoCodec.H264_VAAPI,
-
-    ):
+    _no_preset_codecs = (
+        VideoCodec.AV1, VideoCodec.VP9, VideoCodec.PRORES,
+        VideoCodec.H264_NVENC, VideoCodec.HEVC_NVENC, VideoCodec.AV1_NVENC,
+        VideoCodec.H264_VAAPI, VideoCodec.H265_VAAPI,
+        VideoCodec.AV1_VAAPI, VideoCodec.VP9_VAAPI,
+        VideoCodec.H264_AMF, VideoCodec.HEVC_AMF,
+    )
+    if vstream.codec not in _no_preset_codecs:
         if vstream.preset != FFmpegPreset.DEFAULT:
             preset_crf.extend(["-preset", vstream.preset.value])
 
-    if vstream.codec not in (
-        VideoCodec.DNXHR,
-        VideoCodec.PRORES,
-        VideoCodec.H264_NVENC,
-        VideoCodec.H264_VAAPI,
-    ):
+    # CRF: not applicable for DNXHR, PRORES, NVENC, VAAPI, or AMF encoders
+    _no_crf_codecs = (
+        VideoCodec.DNXHR, VideoCodec.PRORES,
+        VideoCodec.H264_NVENC, VideoCodec.HEVC_NVENC, VideoCodec.AV1_NVENC,
+        VideoCodec.H264_VAAPI, VideoCodec.H265_VAAPI,
+        VideoCodec.AV1_VAAPI, VideoCodec.VP9_VAAPI,
+        VideoCodec.H264_AMF, VideoCodec.HEVC_AMF,
+    )
+    if vstream.codec not in _no_crf_codecs:
         if vstream.crf >= 0:
             preset_crf.extend(["-crf", f"{vstream.crf}"])
 
     # extra params for codec
     codec_params: list[str] = vstream.extra_params.copy()
 
-    # colorspace, color range
-    colorspace: list[str] = []
-    v: str | None
-    k, v = 'color_range', vstream.color.matrix.value
-    print(v)
+    # Colorspace (matrix, primaries, transfer)
+    cs: ColorSpace | None = vstream.color.matrix if isinstance(vstream.color.matrix, ColorSpace) else None
+
+    is_vaapi = is_vaapi_codec(vstream.codec)
+
+    # Filter chain
+    colorspace_filter: list[str] = []
+    pix_fmt_args: list[str] = [] if is_vaapi else ["-pix_fmt", vstream.pix_fmt.value]
+    if cs in (ColorSpace.BT2020NC, ColorSpace.BT2020C):
+        colorspace_filter.append(f"format={vstream.pix_fmt.value}")
+        pix_fmt_args = []  # handled by the filter
+
+    if is_vaapi:
+        # VAAPI requires uploading frames to hardware surfaces (format=nv12 or p010)
+        hw_fmt = "p010" if "10" in vstream.pix_fmt.value else "nv12"
+        colorspace_filter.append(f"format={hw_fmt}")
+        colorspace_filter.append("hwupload")
+        pix_fmt_args = []
+
+    colorspace_args: list[str] = ffmpeg_colorspace_args(cs, vstream.codec)
+
+    # DNXHR colorspace comes as a -vf filter from the helper — merge into filter chain
     if (
-        k not in codec_params
-        and v is not None and v.lower() not in ("unknown", "unspecified")
+        vstream.codec == VideoCodec.DNXHR
+        and colorspace_args
+        and colorspace_args[0] == "-vf"
     ):
-        limited: tuple[str, ...] = ("tv", "mpeg", "limited")
-        # full: tuple[str] = ("pc", "jpeg", "full")
-        colorspace.extend([f"-{k}", "limited" if v.lower() in limited else "full"])
+        colorspace_filter.append(colorspace_args[1])
+        colorspace_args = []
 
+    vf_args: list[str] = (["-vf", ",".join(colorspace_filter)] if colorspace_filter else [])
+
+    # H265: merge x265-params from colorspace helper with extra log-level
     if vstream.codec == VideoCodec.H265:
-        codec_params.insert(0, "-x265-params")
-        codec_params.append("log-level=0")
+        x265_value: str = "log-level=0"
+        if colorspace_args and colorspace_args[0] == "-x265-params":
+            x265_value = colorspace_args[1] + ":log-level=0"
+            colorspace_args = []
+        codec_params = ["-x265-params", x265_value] + codec_params
 
+    # Color range
+    color_range_args: list[str] = ffmpeg_color_range(vstream.color.range)
 
     h, w = pipe.shape[:2]
     e_command: list[str] = [
@@ -281,23 +319,23 @@ def encoder_subprocess(
         "-stats",
 
         "-f", "rawvideo",
-        '-pixel_format', pipe.pix_fmt,
-        '-video_size', f"{w}x{h}",
+        "-pixel_format", pipe.pix_fmt,
+        "-video_size", f"{w}x{h}",
         "-r", str(vstream.frame_rate),
 
         "-i", "pipe:0",
 
-        *vcodec_opts.get(vstream.codec, []),
-        # "-filter:v", f"fps=fps={vstream.frame_rate}",
-        # "-vsync", "0",
-        "-pix_fmt", vstream.pix_fmt.value,
+        *vf_args,
+        *pix_fmt_args,
         "-vcodec", vcodec_to_ffmpeg_vcodec[vstream.codec],
         # "-video_track_timescale", "60000",
         # "-time_base", "1/60000",
+        *vcodec_output_opts.get(vstream.codec, []),
         *profile,
         *preset_crf,
         *codec_params,
-        *colorspace,
+        *colorspace_args,
+        *color_range_args,
         # *metadata,
         str(vstream.filepath), "-y"
     ]
@@ -414,6 +452,11 @@ def write(
     else:
         pipe.shape = img0.shape
 
+    # Sync filepath: media.filepath may have been set after construction
+    if media.filepath is not None:
+        from pathlib import Path
+        media.video.filepath = Path(media.filepath) if not isinstance(media.filepath, Path) else media.filepath
+
     e_subprocess = encoder_subprocess(vstream=media.video)
 
     def _e_thread(e_subprocess: subprocess.Popen, queue: Queue):
@@ -468,5 +511,5 @@ def write(
             print(f"stdout:")
             pprint(stdout)
             if 'error' in stdout.lower():
-                raise
+                raise RuntimeError(f"FFmpeg error:\n{stdout}")
 

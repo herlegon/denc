@@ -1,4 +1,8 @@
 from __future__ import annotations
+import functools
+import os
+import sys
+from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum, IntEnum
 from .pxl_fmt import PixFmt
@@ -74,6 +78,7 @@ vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
     VideoCodec.VP9: "libvpx-vp9",
     VideoCodec.FFV1: "ffv1",
     VideoCodec.DNXHR: "dnxhd",
+    VideoCodec.DNXHD: "dnxhd",
     VideoCodec.PRORES: "prores_ks",
     VideoCodec.AV1: "libsvtav1",
 
@@ -93,28 +98,139 @@ vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
 }
 
 
-CUDA_DEVICE_OPTS = "-hwaccel cuda -hwaccel_output_format cuda"
-VAAPI_DEVICE_OPTS = "-hwaccel vaapi -hwaccel_output_format vaapi -rc_mode CQP"
-VULKAN_DEVICE_OPTS = "-init_hw_device vulkan=vkdev:0 -filter_hw_device vkdev -filter:v format=nv12,hwupload"
+IS_LINUX: bool = sys.platform == "linux"
+IS_WINDOWS: bool = sys.platform == "win32"
+
+# Codec vendor / platform classifications
+_VAAPI_CODECS: list[VideoCodec] = [
+    VideoCodec.H264_VAAPI,
+    VideoCodec.H265_VAAPI,
+    VideoCodec.AV1_VAAPI,
+    VideoCodec.VP9_VAAPI,
+]
+
+_NVENC_CODECS: list[VideoCodec] = [
+    VideoCodec.H264_NVENC,
+    VideoCodec.HEVC_NVENC,
+    VideoCodec.AV1_NVENC,
+]
+
+_AMF_CODECS: list[VideoCodec] = [
+    VideoCodec.H264_AMF,
+    VideoCodec.HEVC_AMF,
+]
+
+
+def is_vaapi_codec(codec: VideoCodec) -> bool:
+    """Return True if codec is VAAPI-based (Linux only)."""
+    return codec in _VAAPI_CODECS
+
+
+def is_nvenc_codec(codec: VideoCodec) -> bool:
+    """Return True if codec is NVIDIA NVENC (Windows and Linux)."""
+    return codec in _NVENC_CODECS
+
+
+def is_amf_codec(codec: VideoCodec) -> bool:
+    """Return True if codec is AMD AMF (Windows native)."""
+    return codec in _AMF_CODECS
+
+
+def is_hwaccel_codec(codec: VideoCodec) -> bool:
+    """Return True if codec uses hardware acceleration."""
+    return is_vaapi_codec(codec) or is_nvenc_codec(codec) or is_amf_codec(codec)
+
+
+def get_vaapi_device() -> str:
+    """Find the default VAAPI render device on Linux."""
+    if not IS_LINUX:
+        return ""
+    for i in range(128, 136):
+        dev = f"/dev/dri/renderD{i}"
+        if os.path.exists(dev):
+            return dev
+    if os.path.exists("/dev/dri/card0"):
+        return "/dev/dri/card0"
+    return "/dev/dri/renderD128"
+
+
+def codec_platform_check(codec: VideoCodec, platform: str = sys.platform) -> tuple[bool, str]:
+    """Check whether a codec is supported on the given operating system."""
+    if platform == "win32" and is_vaapi_codec(codec):
+        return False, (
+            f"VAAPI codec '{codec.value}' is only available on Linux (Intel/AMD). "
+            f"On Windows, use AMF for AMD ({VideoCodec.H264_AMF.value}, {VideoCodec.HEVC_AMF.value}) "
+            f"or NVENC for NVIDIA ({VideoCodec.H264_NVENC.value}, {VideoCodec.HEVC_NVENC.value})."
+        )
+    if platform == "linux" and is_amf_codec(codec):
+        return False, (
+            f"AMF codec '{codec.value}' is only supported on Windows for AMD GPUs."
+        )
+    return True, ""
+
+
+@functools.lru_cache(maxsize=None)
+def is_codec_supported(codec: VideoCodec, check_hardware: bool = True) -> bool:
+    """Return True if codec is supported on the current platform and hardware."""
+    valid, _ = codec_platform_check(codec)
+    if not valid:
+        return False
+
+    if check_hardware and is_hwaccel_codec(codec):
+        from .utils.tools import ffmpeg_exe
+        import subprocess
+
+        cmd = [
+            ffmpeg_exe, "-hide_banner", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.04",
+        ]
+        if is_vaapi_codec(codec):
+            dev = get_vaapi_device()
+            if not dev or not os.path.exists(dev):
+                return False
+            cmd.extend(["-vaapi_device", dev, "-vf", "format=nv12,hwupload"])
+        cmd.extend(["-c:v", vcodec_to_ffmpeg_vcodec[codec], "-f", "null", "-y", "-"])
+        try:
+            res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=3)
+            return res.returncode == 0
+        except Exception:
+            return False
+
+    return True
+
+
+# Platform-dependent FFmpeg options for hardware codecs:
+# - Input options (BEFORE -i): e.g. -vaapi_device on Linux
+#   Note: rawvideo pipe inputs do NOT use -hwaccel cuda (decoder option).
+# Output options (AFTER -i, applying to the encoder/output)
+vcodec_output_opts: dict[VideoCodec, list[str]] = {}
+
+if IS_LINUX:
+    # Linux: VAAPI (Intel / AMD via Mesa/libva)
+    vaapi_device: str = get_vaapi_device()
+    vaapi_out = (["-vaapi_device", vaapi_device] if vaapi_device else []) + ["-rc_mode", "CQP"]
+
+    for k in _VAAPI_CODECS:
+        vcodec_output_opts[k] = list(vaapi_out)
+
+    for k in _NVENC_CODECS + _AMF_CODECS:
+        vcodec_output_opts[k] = []
+
+elif IS_WINDOWS:
+    for k in _VAAPI_CODECS + _NVENC_CODECS:
+        vcodec_output_opts[k] = []
+
+    # Windows: AMD AMF (native on Windows for AMD Radeon GPUs)
+    for k in _AMF_CODECS:
+        vcodec_output_opts[k] = ["-rc", "cqp"]
+
+else:
+    for k in _VAAPI_CODECS + _NVENC_CODECS + _AMF_CODECS:
+        vcodec_output_opts[k] = []
+
+# Legacy alias
 vcodec_opts: dict[VideoCodec, list[str]] = {
-    # VideoCodec.H264_VULKAN: VULKAN_DEVICE_OPTS.split(" "),
-    **{
-        k: CUDA_DEVICE_OPTS.split()
-        for k in [
-            VideoCodec.H264_NVENC,
-            VideoCodec.HEVC_NVENC,
-            VideoCodec.AV1_NVENC
-        ]
-    },
-    **{
-        k: VAAPI_DEVICE_OPTS.split()
-        for k in [
-            VideoCodec.H264_VAAPI,
-            VideoCodec.H265_VAAPI,
-            VideoCodec.AV1_VAAPI,
-            VideoCodec.VP9_VAAPI
-        ]
-    },
+    **vcodec_output_opts,
 }
 
 
@@ -144,6 +260,7 @@ vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.VP9: ".webm",
     VideoCodec.FFV1: ".mkv",
     VideoCodec.DNXHR: ".mxf",
+    VideoCodec.DNXHD: ".mxf",
     VideoCodec.PRORES: ".mov",
     VideoCodec.AV1: ".mp4",
 
@@ -156,7 +273,7 @@ vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.H264_VAAPI: ".mkv",
     VideoCodec.H265_VAAPI: ".mkv",
     VideoCodec.AV1_VAAPI: ".mp4",
-    VideoCodec.VP9_VAAPI: "vp9_vaapi",
+    VideoCodec.VP9_VAAPI: ".webm",
 
     VideoCodec.H264_AMF: ".mkv",
     VideoCodec.HEVC_AMF: ".mkv",
@@ -168,6 +285,7 @@ supported_pixfmt: dict[VideoCodec, tuple[PixFmt]] = {
     VideoCodec.H265: (PixFmt.YUV420P, PixFmt.YUV422P10, PixFmt.YUV444P10),
     VideoCodec.FFV1: (PixFmt.YUV420P, PixFmt.YUV422P10, PixFmt.RGB24, PixFmt.RGB48),
     VideoCodec.DNXHR: (PixFmt.YUV420P, PixFmt.YUV422P10, PixFmt.YUV444P10),
+    VideoCodec.DNXHD: (PixFmt.YUV422P10,),
     VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUV444P10),
     VideoCodec.VP9: (PixFmt.YUV420P, PixFmt.YUV422P10, PixFmt.YUV444P10),
     VideoCodec.AV1: (PixFmt.YUV420P, PixFmt.YUV422P10, PixFmt.YUV444P10),
@@ -215,14 +333,29 @@ CODEC_PROFILE: dict[VideoCodec, CodecProfile] = {
         available=("dnxhr_hqx", "lb", "sq", "hq", "hqx", "444"),
         default="dnxhr_hqx"
     ),
+    VideoCodec.DNXHD: CodecProfile(
+        available=("dnxhd",), default=""
+    ),
+    VideoCodec.AV1_NVENC: CodecProfile(
+        available=("main", "high", "professional"), default=""
+    ),
     VideoCodec.PRORES: CodecProfile(
         available=("proxy", "lt", "standard", "hq", "4444", "4444xq"),
         default=str(ProResProfile.Standard)
     ),
 
-    # VideoCodec.H264_VULKAN: CodecProfile(available=(), default=""),
-    VideoCodec.H264_VAAPI: CodecProfile(available=(), default=""),
+    # Hardware codecs
+    VideoCodec.H264_VAAPI: CodecProfile(
+        available=("constrained_baseline", "baseline", "main", "high"), default=""
+    ),
+    VideoCodec.H265_VAAPI: CodecProfile(available=("main", "main10"), default=""),
+    VideoCodec.VP9_VAAPI: CodecProfile(available=("profile0", "profile1", "profile2", "profile3"), default=""),
+    VideoCodec.AV1_VAAPI: CodecProfile(available=("main", "high", "professional"), default=""),
 
+    VideoCodec.H264_AMF: CodecProfile(
+        available=("constrained_baseline", "baseline", "main", "high"), default=""
+    ),
+    VideoCodec.HEVC_AMF: CodecProfile(available=("main", "main10"), default=""),
 }
 
 

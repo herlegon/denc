@@ -312,15 +312,10 @@ class OutVideoStream(VideoStream):
                 warn(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {CODEC_PROFILE[self._codec].available}")
                 return ""
         else:
-            if (
-                not self._profile and CODEC_PROFILE[self._codec].default
-            ):
-                return CODEC_PROFILE[self._codec].default
-        return self._profile
-
+            return CODEC_PROFILE[self._codec].default
 
     @profile.setter
     def profile(self, profile: str) -> None:
-        if not profile in CODEC_PROFILE[self._codec].available:
-            warn(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {CODEC_PROFILE[self._codec].available}")
+        if profile and profile not in CODEC_PROFILE[self._codec].available:
+            warn(f"\'{profile}\' is not a valid profile for {self._codec}, available: {CODEC_PROFILE[self._codec].available}")
         self._profile = profile

@@ -20,7 +20,7 @@ class SubtitleInfo:
 
 
 
-@dataclass(slots=True)
+@dataclass
 class MediaStream:
     video: VideoStream | OutVideoStream
     audio: AudioInfo | None = None
@@ -28,8 +28,7 @@ class MediaStream:
     seek: Seek = field(default=None, init=False)
     filepath: Optional[Path] = None
 
-
-    def __post__init__(self) -> None:
+    def __post_init__(self) -> None:
         if self.video is not None:
             self.video.parent = self
 

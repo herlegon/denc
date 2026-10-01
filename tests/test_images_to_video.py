@@ -1,19 +1,19 @@
+from fractions import Fraction
+import multiprocessing
+import os
 from argparse import ArgumentParser
 from decimal import Decimal
 from pathlib import Path
-from hytils import (
-    lightcyan
-)
-import multiprocessing
-import os
 from pprint import pprint
 import signal
 import sys
 import time
 from typing import Any
 
-import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import numpy as np
+from hytils import lightcyan
 
 import denc
 from denc import (
@@ -25,6 +25,7 @@ from denc import (
     img_to_tensor,
     dlogger,
     vcodec_to_extension,
+    is_codec_supported,
 )
 import torch
 
@@ -45,7 +46,7 @@ def generate_filename(media: MediaStream) -> str:
         f"{w}x{h}",
         frame_rate_str,
         vstream.pix_fmt.value,
-        vstream.color.matrix,
+        vstream.color.matrix.value if isinstance(vstream.color.matrix, ColorSpace) else str(vstream.color.matrix),
         f"crf{vstream.crf}",
         vstream.preset.value.lower(),
     ])) + vcodec_to_extension[vstream.codec]
@@ -126,37 +127,21 @@ def main():
 
     # codec
     if args.codec or all_tests:
-        codecs: list[VideoCodec] = list([c for c in VideoCodec])
-
-        codecs = [
-            # VideoCodec.H264,
-            # VideoCodec.H265,
-            # VideoCodec.FFV1,
-            # VideoCodec.DNXHR,
-            # VideoCodec.AV1,
-            # VideoCodec.VP9,
-            # VideoCodec.PRORES,
-            # VideoCodec.H264_VULKAN,
-            # VideoCodec.H264_NVENC,
-            # VideoCodec.H265_NVENC,
-            # VideoCodec.HEVC_NVENC,
-            # VideoCodec.AV1_NVENC,
-            VideoCodec.H264_VAAPI,
-            VideoCodec.H265_VAAPI,
-            VideoCodec.AV1_VAAPI,
-            VideoCodec.VP9_VAAPI,
-        ]
+        codecs: list[VideoCodec] = [c for c in VideoCodec if is_codec_supported(c)]
 
         pprint(codecs)
         for codec in codecs:
+            if codec == VideoCodec.DNXHD:
+                # DNxHD standard requires 1080p or 720p broadcast resolutions
+                continue
             vstream.codec = codec
-            # if codec in (
-            #     VideoCodec.H264,
-            #     # VideoCodec.H264_VULKAN,
-            # ):
-            #     vstream.pix_fmt = PixFmt.YUV420P
-            # else:
-            #     vstream.pix_fmt = PixFmt.YUV422P10
+            if codec in (
+                VideoCodec.DNXHR,
+                VideoCodec.PRORES,
+            ):
+                vstream.pix_fmt = PixFmt.YUV422P10
+            else:
+                vstream.pix_fmt = default_settings['pix_fmt']
 
 
             out_media.filepath = generate_filename(out_media)
@@ -185,11 +170,11 @@ def main():
     if args.fps or all_tests:
         for frame_rate in ("25", "50", "23.976", "29.97", "47.952", "59.94"):
         # for frame_rate in (59.94, ):
-            vstream.frame_rate = Decimal(frame_rate)
+            vstream.frame_rate = Fraction(frame_rate)
             out_media.filepath = generate_filename(out_media)
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
-        vstream.frame_rate = default_settings['pix_fmt']
+        vstream.frame_rate = default_settings['frame_rate']
 
 
     # crf

@@ -3,7 +3,6 @@
         "**/__pycache__": true,
         "**/dist": true,
         "**/*.egg-info": true,
-
         "**/*.pt": true,
         "**/*.pth": true,
         "**/*.safetensors": true,
@@ -12,16 +11,13 @@
         "**/*.ncnn": true,
         "**/*.bin": true,
         "**/*.param": true,
-
         "**/*.png": true,
         "**/*.jpg": true,
         "**/*.mkv": true,
         "**/*.mp4": true,
         "**/*.mov": true,
         "**/*.mxf": true,
-
         "**/*.exe": true,
-
         "**/*.so": true,
         "**/*.ui": false,
         "**/~$$*": true,
@@ -39,6 +35,7 @@
         "../hytils",
         "../hsys",
         "../hinstall",
+        "../denc"
     ],
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {

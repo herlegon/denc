@@ -78,7 +78,7 @@ def ffmpeg_colorspace_args(
         if vcodec == VideoCodec.H264:
             args = [
                 "-x264-params",
-                f"colorspace={space}:colorprim={prim}:transfer={trc}"
+                f"colormatrix={space}:colorprim={prim}:transfer={trc}"
             ]
             args.extend([
                 "-colorspace", space,
