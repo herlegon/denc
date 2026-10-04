@@ -5,7 +5,7 @@ from hytils import red
 import re
 from typing import TYPE_CHECKING, Optional
 
-from .utils.time_conversions import (
+from .time_conversions import (
     FrameRate,
     frame_to_sexagesimal,
     sexagesimal_to_frame,

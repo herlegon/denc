@@ -8,7 +8,7 @@ import subprocess
 import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from hytils import lightcyan
-from denc.utils.tools import ffmpeg_exe
+from denc.tools import ffmpeg_exe
 
 
 class PatternName(Enum):

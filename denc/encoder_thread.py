@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.cuda import StreamContext
 
 from .base_thread import BaseThread, NnFrame
-from .encoder import encoder_subprocess
+from .encoder import generate_encoder_command
 from .media_stream import MediaStream
 from .vstream import FShape, PipeFormat, VideoStream
 
@@ -33,7 +33,7 @@ class EncoderThread(BaseThread):
         self.media_stream = media_stream
         # Start the encoder by using settings defined in the media stream
         if use_predefined_settings:
-            self.e_subprocess = encoder_subprocess(vstream=media_stream.video)
+            self.e_subprocess = generate_encoder_command(vstream=media_stream.video)
         else:
             self.e_subprocess = None
 
@@ -74,7 +74,7 @@ class EncoderThread(BaseThread):
                 math.prod(pipe.shape) * torch.tensor([], dtype=pipe.dtype).element_size()
             )
             cuda = bool("cuda" in str(d_tensor.device))
-            self.e_subprocess = encoder_subprocess(vstream=vstream)
+            self.e_subprocess = generate_encoder_command(vstream=vstream)
             skip_first_frame = True
 
         else:

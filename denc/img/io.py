@@ -11,7 +11,7 @@ from typing import Literal
 import torch
 from torch import Tensor
 
-from ..utils.np_dtypes import (
+from ..np_dtypes import (
     np_to_float32,
     np_to_uint8,
 )

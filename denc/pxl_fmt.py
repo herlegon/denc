@@ -3,13 +3,15 @@ from hytils import red, lightgreen, darkgrey
 import re
 import subprocess
 
-from .utils.tools import ffmpeg_exe
-from .utils.dlogger import dlogger
+from .tools import ffmpeg_exe
+from .dlogger import dlogger
 
 
 
 class PixFmt(Enum):
     YUV420P = "yuv420p"
+    YUV422P = "yuv422p"
+    YUV420P10 = "yuv420p10"
     YUV422P10 = "yuv422p10le"
     YUV444P10 = "yuv444p10le"
     RGB24 = "rgb24"
@@ -17,6 +19,8 @@ class PixFmt(Enum):
     RGBA24 = "rgba24"
     RGBA48 = "rgba48le"
 
+
+RGB_PREFIXES = ("gbr", "bgr", "rgb")
 
 
 def list_pixel_formats() -> dict[str, dict[str, bool | int | str]]:

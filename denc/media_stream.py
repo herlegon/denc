@@ -27,6 +27,8 @@ class MediaStream:
     subtitles: SubtitleInfo | None = None
     seek: Seek = field(default=None, init=False)
     filepath: Optional[Path] = None
+    # Add the property to the basename
+    add_prop_suffix: bool = False
 
     def __post_init__(self) -> None:
         if self.video is not None:
@@ -34,6 +36,7 @@ class MediaStream:
 
         if isinstance(self.video, OutVideoStream):
             self.video.filepath = self.filepath
+            self.video.add_prop_suffix = self.add_prop_suffix
 
         self.seek = Seek(vstream=self.video)
 

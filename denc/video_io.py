@@ -14,7 +14,7 @@ from pprint import pformat, pprint
 import subprocess
 from warnings import warn
 
-from .colorpspace import ColorInfo, ColorRange
+from .color_space import ColorInfo, ColorRange
 
 from .media_stream import (
     AudioInfo,
@@ -23,11 +23,11 @@ from .media_stream import (
     VideoStream,
 )
 from .pxl_fmt import PIXEL_FORMATS, PixFmt
-from .utils.tools import ffprobe_exe
-from .utils.time_conversions import FrameRate
-from .vcodec import VideoCodec, supported_video_exts, CODEC_PROFILE
+from .tools import ffprobe_exe
+from .time_conversions import FrameRate
+from .vcodec import VideoCodec, supported_video_exts, VCODEC_PROFILES
 from .vstream import FieldOrder, OutVideoStream
-from .utils.dlogger import dlogger
+from .dlogger import dlogger
 
 
 
@@ -259,12 +259,12 @@ def open(filepath: Path) -> MediaStream | None:
         raise NotImplementedError(f"Video Codec \'{vcodec_name}\' is not supported")
     v_codec = VideoCodec(vcodec_name)
     v_profile = ""
-    if v_codec in (VideoCodec.DNXHR, VideoCodec.DNXHD):
-        # if DNxHD or DNxHR, profile has to be used too
+    if v_codec == VideoCodec.DNXHR:
+        # if DNxHR, profile has to be used too
         v_profile = v_stream.get("profile", "").lower()
         if "dnxhr" in v_profile:
             v_codec = VideoCodec.DNXHR
-            for p in CODEC_PROFILE[VideoCodec.DNXHR].available:
+            for p in VCODEC_PROFILES[VideoCodec.DNXHR].available:
                 if p in v_profile:
                     v_profile = p.upper()
                     break
@@ -313,7 +313,7 @@ def open(filepath: Path) -> MediaStream | None:
                 except:
                     pass
 
-    # Tags for DNxHD / DNxHR are stored in format struct
+    # Tags for DNxHR are stored in format struct
     if v_codec == VideoCodec.DNXHR:
         tags_to_discard = (
             'application_platform',

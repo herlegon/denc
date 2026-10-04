@@ -12,19 +12,22 @@ import torch
 from typing import Any, Literal, Optional, TYPE_CHECKING
 from warnings import warn
 
-from .colorpspace import (
+from .color_space import (
     ColorInfo,
     ColorRange,
     ColorSpace,
 )
 from .pxl_fmt import PIXEL_FORMATS
 from .torch_tensor import np_to_torch_dtype
-from .utils.time_conversions import FrameRate
+from .time_conversions import FrameRate
 from .vcodec import (
+    X26X_PRESETS,
+    Ffv1CodecOption,
     PixFmt,
     VideoCodec,
+    X26xPreset,
     vcodec_to_extension,
-    CODEC_PROFILE,
+    VCODEC_PROFILES,
 )
 if TYPE_CHECKING:
     from .media_stream import MediaStream
@@ -178,31 +181,17 @@ class VideoStream:
 
 
     @property
-    def preset(self) -> FFmpegPreset:
+    def preset(self) -> X26xPreset:
         ...
 
     @preset.setter
-    def preset(self, preset: FFmpegPreset) -> None:
+    def preset(self, preset: X26xPreset) -> None:
         ...
 
 
 
 
 
-# presets
-class FFmpegPreset(Enum):
-    DEFAULT = "medium"
-    ULTRAFAST = "ultrafast"
-    SUPERFAST = "superfast"
-    VERYFAST = "veryfast"
-    FASTER = "faster"
-    FAST = "fast"
-    MEDIUM = "medium"
-    SLOW = "slow"
-    SLOWER = "slower"
-    VERYSLOW = "veryslow"
-    PLACEBO = "placebo"
-_preset_keys = [preset.name for preset in FFmpegPreset]
 
 
 
@@ -210,9 +199,11 @@ _preset_keys = [preset.name for preset in FFmpegPreset]
 class OutVideoStream(VideoStream):
     parent: Optional[MediaStream] = field(default=None, repr=False, compare=False)
     _extra_params: list[str] = field(default_factory=list)
-    _preset: FFmpegPreset = FFmpegPreset.DEFAULT
+    _preset: X26xPreset = X26xPreset.DEFAULT
     _crf: int = -1
     _profile: str = ""
+    codec_options: Ffv1CodecOption | None = None
+    add_prop_suffix: bool = False
 
     def __post_init__(self):
         super().__post_init__()
@@ -278,13 +269,13 @@ class OutVideoStream(VideoStream):
 
 
     @property
-    def preset(self) -> FFmpegPreset:
+    def preset(self) -> X26xPreset:
         return self._preset
 
 
     @preset.setter
-    def preset(self, preset: FFmpegPreset) -> None:
-        if preset.name in _preset_keys:
+    def preset(self, preset: X26xPreset) -> None:
+        if preset.name in X26X_PRESETS:
             self._preset = preset
 
 
@@ -306,16 +297,16 @@ class OutVideoStream(VideoStream):
     @property
     def profile(self) -> str:
         if self._profile:
-            if self._profile in CODEC_PROFILE[self._codec].available:
+            if self._profile in VCODEC_PROFILES[self._codec].available:
                 return self._profile
             else:
-                warn(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {CODEC_PROFILE[self._codec].available}")
+                warn(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
                 return ""
         else:
-            return CODEC_PROFILE[self._codec].default
+            return VCODEC_PROFILES[self._codec].default
 
     @profile.setter
     def profile(self, profile: str) -> None:
-        if profile and profile not in CODEC_PROFILE[self._codec].available:
-            warn(f"\'{profile}\' is not a valid profile for {self._codec}, available: {CODEC_PROFILE[self._codec].available}")
+        if profile and profile not in VCODEC_PROFILES[self._codec].available:
+            warn(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
         self._profile = profile
