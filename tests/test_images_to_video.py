@@ -210,11 +210,22 @@ def main():
 
     # presets
     if args.preset or all_tests:
+        out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+        out_media.add_prop_suffix = True
+
+        vstream.codec = VideoCodec.H265
         for preset in X26xPreset:
             vstream.preset = preset
-            out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
-            print(lightcyan(out_media.filepath))
+            print(lightcyan("Preset:"), vstream.preset.value)
             denc.write(out_media, frames=out_frames)
+
+        # Verify it's unused with other codecs
+        vstream.codec = VideoCodec.DNXHR
+        vstream.preset = X26xPreset.MEDIUM
+        vstream.pix_fmt = PixFmt.YUV422P10
+        print(lightcyan("Preset:"), vstream.preset.value)
+        denc.write(out_media, frames=out_frames)
+
         vstream.preset = default_settings['preset']
 
     # Color range

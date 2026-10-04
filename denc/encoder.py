@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from hytils import purple, red, yellow
+from hytils import lightgreen, purple, red, yellow
 import numpy as np
 import os
 from pprint import pprint
@@ -29,6 +29,7 @@ from .vcodec import (
     VCODEC_PROFILES,
     CRF_RANGES,
     VCODECS_PRESETS,
+    X26xPreset,
     to_ffmpeg_pixfmt,
     vcodec_to_ffmpeg_vcodec,
     vcodec_to_extension,
@@ -83,9 +84,13 @@ def effective_profile(vcodec: VideoCodec, profile: str | None) -> str | None:
 
 
 
-def effective_preset(vcodec: VideoCodec, preset: str) -> str | None:
+def effective_preset(vcodec: VideoCodec, preset: X26xPreset) -> X26xPreset | None:
     """Preset really sent to ffmpeg, None if not applicable."""
-    if vcodec in VCODECS_PRESETS and preset in VCODECS_PRESETS[vcodec]:
+    if (
+        preset is not None
+        and vcodec in VCODECS_PRESETS
+        and preset in VCODECS_PRESETS[vcodec]
+    ):
         return preset
     return None
 
@@ -135,8 +140,8 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     profile_args: list[str] = ["-profile:v", profile] if profile else []
 
     # Preset: not applicable for AV1, VP9, PRORES, or any hw-accel encoder
-    preset = effective_preset(vcodec, vstream.preset.value)
-    preset_args: list[str] = ["-preset", preset] if preset else []
+    preset_value = effective_preset(vcodec, vstream.preset)
+    preset_args: list[str] = ["-preset", preset_value.value] if preset_value else []
 
     # crf range
     crf = effective_crf(vcodec, vstream.crf)
@@ -477,7 +482,7 @@ def generate_video_basename_suffix(vstream: OutVideoStream) -> str:
     matrix_str = matrix.value if isinstance(matrix, ColorSpace) else matrix  # str | None
 
     crf = effective_crf(vcodec, vstream.crf)
-    preset = effective_preset(vcodec, vstream.preset.value)
+    preset = effective_preset(vcodec, vstream.preset)
     profile = effective_profile(vcodec, vstream.profile)
 
     # None / empty parts are skipped
@@ -490,7 +495,7 @@ def generate_video_basename_suffix(vstream: OutVideoStream) -> str:
         matrix_str,
         effective_color_range(vstream.pix_fmt.value).value,
         f"crf{crf}" if crf is not None else None,
-        preset.lower() if preset else None,
+        preset.value.lower() if preset else None,
     ]
 
     suffix = "_".join(str(p) for p in parts if p if p is not None)

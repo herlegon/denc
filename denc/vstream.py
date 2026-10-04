@@ -180,18 +180,6 @@ class VideoStream:
         self.device = Device(name=device, dtype=dtype)
 
 
-    @property
-    def preset(self) -> X26xPreset:
-        ...
-
-    @preset.setter
-    def preset(self, preset: X26xPreset) -> None:
-        ...
-
-
-
-
-
 
 
 
@@ -199,11 +187,11 @@ class VideoStream:
 class OutVideoStream(VideoStream):
     parent: Optional[MediaStream] = field(default=None, repr=False, compare=False)
     _extra_params: list[str] = field(default_factory=list)
-    _preset: X26xPreset = X26xPreset.DEFAULT
     _crf: int = -1
     _profile: str = ""
     codec_options: Ffv1CodecOption | None = None
     add_prop_suffix: bool = False
+    _preset: X26xPreset | None = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -275,7 +263,7 @@ class OutVideoStream(VideoStream):
 
     @preset.setter
     def preset(self, preset: X26xPreset) -> None:
-        if preset.name in X26X_PRESETS:
+        if preset in X26xPreset:
             self._preset = preset
 
 

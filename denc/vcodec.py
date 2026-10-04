@@ -280,8 +280,7 @@ PRESET_CODECS = {
 
 
 # presets
-class X26xPreset(Enum):
-    DEFAULT = "medium"
+class X26xPreset(str, Enum):
     ULTRAFAST = "ultrafast"
     SUPERFAST = "superfast"
     VERYFAST = "veryfast"
@@ -292,7 +291,7 @@ class X26xPreset(Enum):
     SLOWER = "slower"
     VERYSLOW = "veryslow"
     PLACEBO = "placebo"
-X26X_PRESETS = [preset.name for preset in X26xPreset]
+X26X_PRESETS = [preset for preset in X26xPreset]
 
 
 
