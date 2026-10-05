@@ -1,6 +1,16 @@
 from .dlogger import dlogger
 
-from .vcodec import VideoCodec, vcodec_to_extension, X26xPreset, VCODEC_PIXFMTS, DNXHR_PROFILE_PIXFMT
+from .vcodec import (
+    VideoCodec,
+    vcodec_to_extension,
+    X26xPreset,
+    VCODEC_PIXFMTS,
+)
+from .profiles import (
+    VCODEC_PROFILES,
+    DNXHR_PROFILE_PIXFMT,
+    default_pixfmt_for_profile,
+)
 from .capabilities import is_codec_supported
 
 from .pxl_fmt import PixFmt, PIXEL_FORMATS, RGB_PREFIXES
@@ -38,7 +48,10 @@ __all__ = [
     "PIXEL_FORMATS",
     "VCODEC_PIXFMTS",
     "DNXHR_PROFILE_PIXFMT",
+    "default_pixfmt_for_profile",
+    "VCODEC_PROFILES",
     "RGB_PREFIXES",
+
     "X26xPreset",
 
     "ColorInfo",

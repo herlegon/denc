@@ -73,8 +73,6 @@ vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
     VideoCodec.PRORES: "prores_ks",
     VideoCodec.AV1: "libsvtav1",
 
-    # VideoCodec.H264_VULKAN: "h264_vulkan",
-
     VideoCodec.H264_NVENC: "h264_nvenc",
     VideoCodec.HEVC_NVENC: "hevc_nvenc",
     VideoCodec.AV1_NVENC: "av1_nvenc",
@@ -104,24 +102,6 @@ vcodec_opts: dict[VideoCodec, list[str]] = {
 }
 
 
-class ProResProfile(IntEnum):
-    Proxy = 0
-    LT = 1
-    Standard = 2    # ProRes 422
-    HQ = 3
-    HQ_ALPHA = 4
-
-
-# default profile
-vcodec_default_profile: dict[VideoCodec, str] = {
-    VideoCodec.H264: "",
-    VideoCodec.H265: "",
-    VideoCodec.VP9: "",
-    VideoCodec.FFV1: "",
-    VideoCodec.DNXHR: "dnxhr_hqx",
-    VideoCodec.PRORES: str(ProResProfile.Standard),
-}
-
 
 vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.H264: ".mkv",
@@ -132,8 +112,6 @@ vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.DNXHR: ".mxf",
     VideoCodec.PRORES: ".mov",
     VideoCodec.AV1: ".mp4",
-
-    # VideoCodec.H264_VULKAN: ".mkv",
 
     VideoCodec.H264_NVENC: ".mkv",
     VideoCodec.HEVC_NVENC: ".mkv",
@@ -146,11 +124,38 @@ vcodec_to_extension: dict[VideoCodec, str] = {
 
 VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
     VideoCodec.H264: (PixFmt.YUV420P,),
-    VideoCodec.H265: (PixFmt.YUV420P, PixFmt.YUV420P10, PixFmt.YUV422P, PixFmt.YUV422P10, PixFmt.YUV444P10),
-    VideoCodec.FFV1: (PixFmt.YUV420P, PixFmt.YUV422P, PixFmt.YUV420P10, PixFmt.YUV422P10, PixFmt.YUV444P10, PixFmt.RGB24, PixFmt.RGB48),
-    VideoCodec.DNXHR: (PixFmt.YUV422P, PixFmt.YUV422P10, PixFmt.YUV444P10),
+    VideoCodec.H265: (
+        PixFmt.YUV420P,
+        PixFmt.YUV420P10,
+        PixFmt.YUV422P,
+        PixFmt.YUV422P10,
+        PixFmt.YUV444P,
+        PixFmt.YUV444P10
+    ),
+    VideoCodec.FFV1: (
+        PixFmt.YUV420P,
+        PixFmt.YUV420P10,
+        PixFmt.YUV422P,
+        PixFmt.YUV422P10,
+        PixFmt.YUV444P,
+        PixFmt.YUV444P10,
+        PixFmt.RGB24,
+        PixFmt.RGB48
+    ),
+    VideoCodec.DNXHR: (
+        PixFmt.YUV422P,
+        PixFmt.YUV422P10,
+        PixFmt.YUV444P10,
+    ),
     VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUV444P10),
-    VideoCodec.VP9: (PixFmt.YUV420P, PixFmt.YUV420P10),
+    VideoCodec.VP9: (
+        PixFmt.YUV420P,
+        PixFmt.YUV420P10,
+        PixFmt.YUV420P12,
+        PixFmt.YUV422P,
+        PixFmt.YUV422P10,
+        PixFmt.YUV422P12,
+    ),
     VideoCodec.AV1: (PixFmt.YUV420P, PixFmt.YUV420P10),
 
     VideoCodec.H264_NVENC: (PixFmt.YUV420P,),
@@ -163,13 +168,18 @@ VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
 
 
 PIXFMT_TO_FFMPEG: dict[PixFmt, str] = {
-    PixFmt.YUV420P:   "yuv420p",
-    PixFmt.YUV420P10: "yuv420p10le",
-    PixFmt.YUV422P:   "yuv422p",
-    PixFmt.YUV422P10: "yuv422p10le",
-    PixFmt.YUV444P10: "yuv444p10le",
-    PixFmt.RGB24:     "bgr0",       # FFV1
-    PixFmt.RGB48:     "gbrp16le",   # FFV1
+    PixFmt.YUV420P:     "yuv420p",
+    PixFmt.YUV420P10:   "yuv420p10le",
+    PixFmt.YUV420P12:   "yuv420p12le",
+    PixFmt.YUV422P:     "yuv422p",
+    PixFmt.YUV422P10:   "yuv422p10le",
+    PixFmt.YUV422P12:   "yuv422p12le",
+    PixFmt.YUV444P:     "yuv444p",
+    PixFmt.YUV444P10:   "yuv444p10le",
+    PixFmt.RGB24:       "bgr0",       # FFV1
+    PixFmt.RGB48:       "gbrp16le",   # FFV1
+    PixFmt.RGBA24:      "rgba24",
+    PixFmt.RGBA48:      "rgba48le",
 }
 
 
@@ -193,81 +203,22 @@ def to_ffmpeg_pixfmt(vcodec: VideoCodec, pixfmt: PixFmt) -> str:
 
 
 
-DNXHR_PROFILE_PIXFMT = {
-    "dnxhr_lb": PixFmt.YUV422P,
-    "dnxhr_sq": PixFmt.YUV422P,
-    "dnxhr_hq": PixFmt.YUV422P,
-    "dnxhr_hqx": PixFmt.YUV422P10,
-    "dnxhr_444": PixFmt.YUV444P10,
-}
-
-# 1. is (profil, pixfmt) allowed ?
-def check_dnxhr(profile: str, pixfmt: PixFmt) -> None:
-    expected = DNXHR_PROFILE_PIXFMT[profile]
-    if pixfmt != expected:
-        raise ValueError(f"{profile} needs {expected.name}, got {pixfmt.name}")
-
-
-# 2. pixfmt -> profiles ?
-def dnxhr_profiles_for(pixfmt: PixFmt) -> list[str]:
-    return [p for p, f in DNXHR_PROFILE_PIXFMT.items() if f == pixfmt]
-
-
-
-@dataclass(slots=True)
-class CodecProfile:
-    available: tuple[str, ...]
-    default: str
-
-
-
-
-VCODEC_PROFILES: dict[VideoCodec, CodecProfile] = {
-    VideoCodec.H264: CodecProfile(
-        available=("baseline", "main", "high", "high10", "high422", "high444"),
-        default=""
-    ),
-    VideoCodec.H265: CodecProfile(
-        available=("main", "main10", "mainstillpicture"), default=""
-    ),
-    VideoCodec.FFV1: CodecProfile(available=(), default=""),
-
-    # mpeg2video    # "simple, main, high",
-    # "No standard profiles exposed (VP8/VP9 use levels instead)"
-    VideoCodec.VP9: CodecProfile(available=(), default=""),
-    # libaom-av1    # "main, high, professional",
-    VideoCodec.AV1: CodecProfile(
-        available=("main", "high", "professional"), default="main"
-    ),
-    VideoCodec.H264_NVENC: CodecProfile(
-        available=("baseline", "main", "high", "high444"), default=""
-    ),
-    VideoCodec.HEVC_NVENC: CodecProfile(available=("main", "main10", "rext"), default=""),
-    VideoCodec.DNXHR: CodecProfile(
-        available=("dnxhr_hqx", "dnxhr_lb", "dnxhr_sq", "dnxhr_hq", "dnxhr_hqx", "dnxhr_444"),
-        default="dnxhr_hqx"
-    ),
-    VideoCodec.AV1_NVENC: CodecProfile(
-        available=("main", "high", "professional"), default=""
-    ),
-    VideoCodec.PRORES: CodecProfile(
-        available=("proxy", "lt", "standard", "hq", "4444", "4444xq"),
-        default=str(ProResProfile.Standard)
-    ),
-
-    VideoCodec.H264_AMF: CodecProfile(
-        available=("constrained_baseline", "baseline", "main", "high"), default=""
-    ),
-    VideoCodec.HEVC_AMF: CodecProfile(available=("main", "main10"), default=""),
-}
-
-
 CRF_CODECS = {
     VideoCodec.H264,   # libx264 : 0-51
     VideoCodec.H265,   # libx265 : 0-51
     VideoCodec.VP9,    # libvpx-vp9 : 0-63, à combiner avec -b:v 0
     VideoCodec.AV1,    # libsvtav1 : 0-63
 }
+
+
+def effective_crf(vcodec: VideoCodec, crf: int) -> int | None:
+    """CRF really sent to ffmpeg (clamped), None if the codec has no CRF."""
+    if vcodec not in CRF_RANGES:
+        return None
+    lo, hi = CRF_RANGES[vcodec][:2]
+    return max(lo, min(crf, hi))
+
+
 
 PRESET_CODECS = {
     VideoCodec.H264,        # libx264 : ultrafast ... veryslow

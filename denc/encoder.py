@@ -18,7 +18,6 @@ from typing import IO, TYPE_CHECKING
 from .capabilities import is_codec_supported
 from .color_space import ColorRange, ColorSpace, effective_color_range, ffmpeg_color_range, ffmpeg_colorspace_args
 from .dh_transfers import dtoh_transfer
-from .pxl_fmt import PIXEL_FORMATS, RGB_PREFIXES
 from .vstream import (
     OutVideoStream,
     PipeFormat,
@@ -26,13 +25,17 @@ from .vstream import (
 )
 
 from .vcodec import (
-    VCODEC_PROFILES,
     CRF_RANGES,
     VCODECS_PRESETS,
     X26xPreset,
+    effective_crf,
     to_ffmpeg_pixfmt,
     vcodec_to_ffmpeg_vcodec,
-    vcodec_to_extension,
+)
+from .profiles import (
+    VCODEC_PROFILES,
+    check_profile_pixfmt,
+    effective_profile
 )
 from .np_dtypes import np_to_uint16, np_to_uint8
 from .tools import ffmpeg_exe
@@ -73,17 +76,6 @@ def pretty_print_cmd(args: list[str]) -> str:
 
 
 
-def effective_profile(vcodec: VideoCodec, profile: str | None) -> str | None:
-    """Profile really sent to ffmpeg, None if not applicable."""
-    if (
-        vcodec in VCODEC_PROFILES
-        and profile in VCODEC_PROFILES[vcodec].available
-    ):
-        return profile
-    return None
-
-
-
 def effective_preset(vcodec: VideoCodec, preset: X26xPreset) -> X26xPreset | None:
     """Preset really sent to ffmpeg, None if not applicable."""
     if (
@@ -95,13 +87,6 @@ def effective_preset(vcodec: VideoCodec, preset: X26xPreset) -> X26xPreset | Non
     return None
 
 
-
-def effective_crf(vcodec: VideoCodec, crf: int) -> int | None:
-    """CRF really sent to ffmpeg (clamped), None if the codec has no CRF."""
-    if vcodec not in CRF_RANGES:
-        return None
-    lo, hi = CRF_RANGES[vcodec][:2]
-    return max(lo, min(crf, hi))
 
 
 
@@ -129,15 +114,21 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
 
     # Validate codec support on current platform
     if not is_codec_supported(vcodec):
-        raise ValueError(f"Not a supported video codec: `{vcodec.value}`")
+        raise ValueError(red(f"Not a supported video codec: `{vcodec.value}`"))
 
     # Pixel format
-    ffmpeg_pix_fmt: str = to_ffmpeg_pixfmt(vcodec=vcodec, pixfmt=vstream.pix_fmt)
+    requested_pix_fmt = vstream.pix_fmt
+    ffmpeg_pix_fmt: str = to_ffmpeg_pixfmt(vcodec=vcodec, pixfmt=requested_pix_fmt)
     pix_fmt_args: list[str] = ["-pix_fmt", ffmpeg_pix_fmt]
 
     # Profiles
     profile = effective_profile(vcodec, vstream.profile)
+    if vcodec == VideoCodec.DNXHR and not profile:
+        raise ValueError(red(f"missing profile for DNxHR"))
     profile_args: list[str] = ["-profile:v", profile] if profile else []
+
+    # Verify that the pixfmi is supported for this profile
+    supported = check_profile_pixfmt(vcodec=vcodec, profile=profile, pixfmt=requested_pix_fmt)
 
     # Preset: not applicable for AV1, VP9, PRORES, or any hw-accel encoder
     preset_value = effective_preset(vcodec, vstream.preset)

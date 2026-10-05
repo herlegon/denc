@@ -10,10 +10,14 @@ from .dlogger import dlogger
 
 class PixFmt(Enum):
     YUV420P = "yuv420p"
-    YUV422P = "yuv422p"
     YUV420P10 = "yuv420p10"
+    YUV420P12 = "yuv422p12le"
+    YUV422P = "yuv422p"
     YUV422P10 = "yuv422p10le"
+    YUV422P12 = "yuv422p12le"
+    YUV444P = "yuv444p"
     YUV444P10 = "yuv444p10le"
+    YUV444P12 = "yuv444p12le"
     RGB24 = "rgb24"
     RGB48 = "rgb48le"
     RGBA24 = "rgba24"

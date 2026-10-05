@@ -25,7 +25,8 @@ from .media_stream import (
 from .pxl_fmt import PIXEL_FORMATS, PixFmt
 from .tools import ffprobe_exe
 from .time_conversions import FrameRate
-from .vcodec import VideoCodec, supported_video_exts, VCODEC_PROFILES
+from .vcodec import VideoCodec, supported_video_exts
+from .profiles import VCODEC_PROFILES
 from .vstream import FieldOrder, OutVideoStream
 from .dlogger import dlogger
 

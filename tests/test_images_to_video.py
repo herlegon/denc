@@ -9,6 +9,7 @@ import signal
 import sys
 import time
 from typing import Any
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
@@ -26,11 +27,15 @@ from denc import (
     is_codec_supported,
     VCODEC_PIXFMTS,
     DNXHR_PROFILE_PIXFMT,
+    VCODEC_PROFILES,
     RGB_PREFIXES,
     X26xPreset,
     ColorRange,
     ColorInfo,
+    default_pixfmt_for_profile,
 )
+from denc.profiles import AV1_PROFILE_PIXFMT, H265_PROFILE_PIXFMT, VP9_PROFILE_PIXFMT
+
 import torch
 
 
@@ -141,19 +146,41 @@ def main():
     # print(vstream.codec)
     out_dir: Path = Path(__file__).resolve().parents[1] / "out" / "img_to_video"
 
+    codec_profile_list: list[tuple[VideoCodec, str]] = []
+    for vcodec in VideoCodec:
+        # if vcodec in (
+        #     VideoCodec.H264,
+        #     VideoCodec.H265,
+        #     VideoCodec.FFV1,
+        #     VideoCodec.DNXHR,
+        # ):
+        #     continue
+        if not is_codec_supported(vcodec):
+            print(lightcyan(f"\n{vcodec.value} :"), f"not supported")
+            continue
+
+        # if vcodec not in (VideoCodec.DNXHR, VideoCodec.H265,):
+        #     codec_profile_list.append((vcodec, None))
+
+        if VCODEC_PROFILES.get(vcodec):
+            for p in VCODEC_PROFILES[vcodec]:
+                codec_profile_list.append((vcodec, p))
+        else:
+            codec_profile_list.append((vcodec, None))
+
+    pprint(codec_profile_list)
+
+
     # codec
     if args.codec or all_tests:
-        codecs: list[VideoCodec] = [c for c in VideoCodec]
 
-        for vcodec in codecs:
+        for vcodec, profile in codec_profile_list:
             if not is_codec_supported(vcodec):
                 print(lightcyan(f"\n{vcodec.value}:"), f"not supported")
                 continue
             vstream.codec = vcodec
-            if vcodec in (VideoCodec.DNXHR, VideoCodec.PRORES):
-                vstream.pix_fmt = PixFmt.YUV422P10
-            else:
-                vstream.pix_fmt = default_settings['pix_fmt']
+            vstream.profile = profile
+            vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
 
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
@@ -164,21 +191,23 @@ def main():
 
     # pixel Format
     if args.pix_fmt or all_tests:
-        for vcodec in VideoCodec:
+        for vcodec in codec_profile_list:
             vstream.codec = vcodec
-            if not is_codec_supported(vcodec):
-                print(lightcyan(f"\n{vcodec.value} :"), f"not supported")
-                continue
-
-            if vcodec == VideoCodec.DNXHR:
-                combos = [(DNXHR_PROFILE_PIXFMT[p], p) for p in DNXHR_PROFILE_PIXFMT]
-            else:
-                combos = [(pf, None) for pf in VCODEC_PIXFMTS[vcodec]]
-
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
-            for pix_fmt, profile in combos:
+            if vcodec == VideoCodec.DNXHR:
+                profile_pixfmt = [(p, DNXHR_PROFILE_PIXFMT[p]) for p in DNXHR_PROFILE_PIXFMT]
+            elif vcodec == VideoCodec.H265:
+                profile_pixfmt = [(p, H265_PROFILE_PIXFMT[p]) for p in H265_PROFILE_PIXFMT]
+            elif vcodec == VideoCodec.AV1:
+                profile_pixfmt = [(p, AV1_PROFILE_PIXFMT[p]) for p in AV1_PROFILE_PIXFMT]
+            elif vcodec == VideoCodec.VP9:
+                profile_pixfmt = [(p, VP9_PROFILE_PIXFMT[p]) for p in VP9_PROFILE_PIXFMT]
+            else:
+                profile_pixfmt = [(pf, None) for pf in VCODEC_PIXFMTS[vcodec]]
+
+            for profile, pix_fmt in profile_pixfmt:
                 vstream.pix_fmt = pix_fmt
                 vstream.profile = profile
                 print(lightcyan(out_media.filepath))

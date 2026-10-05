@@ -27,6 +27,8 @@ from .vcodec import (
     VideoCodec,
     X26xPreset,
     vcodec_to_extension,
+)
+from .profiles import (
     VCODEC_PROFILES,
 )
 if TYPE_CHECKING:
@@ -285,16 +287,15 @@ class OutVideoStream(VideoStream):
     @property
     def profile(self) -> str:
         if self._profile:
-            if self._profile in VCODEC_PROFILES[self._codec].available:
+            if self._profile in VCODEC_PROFILES[self._codec]:
                 return self._profile
             else:
-                warn(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
-                return ""
-        else:
-            return VCODEC_PROFILES[self._codec].default
+                raise ValueError(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
+        return ""
+
 
     @profile.setter
     def profile(self, profile: str) -> None:
-        if profile and profile not in VCODEC_PROFILES[self._codec].available:
-            warn(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
+        if profile and profile not in VCODEC_PROFILES[self._codec]:
+            raise ValueError(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
         self._profile = profile
