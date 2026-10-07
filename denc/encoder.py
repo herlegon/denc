@@ -127,7 +127,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
         raise ValueError(red(f"missing profile for DNxHR"))
     profile_args: list[str] = ["-profile:v", profile] if profile else []
 
-    # Verify that the pixfmi is supported for this profile
+    # Verify that the pixfmt is supported for this profile
     supported = check_profile_pixfmt(vcodec=vcodec, profile=profile, pixfmt=requested_pix_fmt)
 
     # Preset: not applicable for AV1, VP9, PRORES, or any hw-accel encoder

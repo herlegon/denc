@@ -135,6 +135,7 @@ def effective_profile(vcodec: VideoCodec, profile: str | None) -> str | None:
     if (
         vcodec in VCODEC_PROFILES
         and profile in VCODEC_PROFILES[vcodec]
+        and vcodec != VideoCodec.AV1_NVENC
     ):
         return profile
     return None

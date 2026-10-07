@@ -173,11 +173,9 @@ def main():
 
     # codec
     if args.codec or all_tests:
-
         for vcodec, profile in codec_profile_list:
-            if not is_codec_supported(vcodec):
-                print(lightcyan(f"\n{vcodec.value}:"), f"not supported")
-                continue
+            # if vcodec != VideoCodec.AV1_NVENC:
+            #     continue
             vstream.codec = vcodec
             vstream.profile = profile
             vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
@@ -189,9 +187,10 @@ def main():
         vstream.codec = default_settings['codec']
         vstream.pix_fmt = default_settings['pix_fmt']
 
+
     # pixel Format
     if args.pix_fmt or all_tests:
-        for vcodec in codec_profile_list:
+        for vcodec, profile in codec_profile_list:
             vstream.codec = vcodec
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
@@ -205,13 +204,23 @@ def main():
             elif vcodec == VideoCodec.VP9:
                 profile_pixfmt = [(p, VP9_PROFILE_PIXFMT[p]) for p in VP9_PROFILE_PIXFMT]
             else:
-                profile_pixfmt = [(pf, None) for pf in VCODEC_PIXFMTS[vcodec]]
+                profile_pixfmt = [(None, pf) for pf in VCODEC_PIXFMTS[vcodec]]
 
-            for profile, pix_fmt in profile_pixfmt:
-                vstream.pix_fmt = pix_fmt
-                vstream.profile = profile
-                print(lightcyan(out_media.filepath))
-                denc.write(out_media, frames=out_frames)
+            # print(profile_pixfmt)
+            for profile, pix_fmts in profile_pixfmt:
+                print(f"{profile}: {pix_fmts}")
+                if isinstance(pix_fmts, list | tuple):
+                    for pix_fmt in pix_fmts:
+                        vstream.pix_fmt = pix_fmt
+                        vstream.profile = profile
+                        print(lightcyan(out_media.filepath))
+                        denc.write(out_media, frames=out_frames)
+                else:
+                    vstream.pix_fmt = pix_fmts
+                    vstream.profile = profile
+                    print(lightcyan(out_media.filepath))
+                    denc.write(out_media, frames=out_frames)
+
             vstream.codec = default_settings['codec']
             vstream.pix_fmt = default_settings['pix_fmt']
 

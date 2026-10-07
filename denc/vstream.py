@@ -290,12 +290,12 @@ class OutVideoStream(VideoStream):
             if self._profile in VCODEC_PROFILES[self._codec]:
                 return self._profile
             else:
-                raise ValueError(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
+                raise ValueError(f"\'{self._profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec]}")
         return ""
 
 
     @profile.setter
     def profile(self, profile: str) -> None:
         if profile and profile not in VCODEC_PROFILES[self._codec]:
-            raise ValueError(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec].available}")
+            raise ValueError(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec]}")
         self._profile = profile

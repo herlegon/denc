@@ -156,7 +156,7 @@ VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
         PixFmt.YUV422P10,
         PixFmt.YUV422P12,
     ),
-    VideoCodec.AV1: (PixFmt.YUV420P, PixFmt.YUV420P10),
+    VideoCodec.AV1: (PixFmt.YUV420P, PixFmt.YUV420P10, PixFmt.YUV422P10),
 
     VideoCodec.H264_NVENC: (PixFmt.YUV420P,),
     VideoCodec.HEVC_NVENC: (PixFmt.YUV420P, PixFmt.YUV420P10),
