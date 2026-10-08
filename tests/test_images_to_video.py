@@ -191,6 +191,8 @@ def main():
     # pixel Format
     if args.pix_fmt or all_tests:
         for vcodec, profile in codec_profile_list:
+            # if vcodec != VideoCodec.VP9:
+            #     continue
             vstream.codec = vcodec
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
@@ -208,9 +210,10 @@ def main():
 
             # print(profile_pixfmt)
             for profile, pix_fmts in profile_pixfmt:
-                print(f"{profile}: {pix_fmts}")
+                # print(lightcyan(f"{profile}: {pix_fmts}"))
                 if isinstance(pix_fmts, list | tuple):
                     for pix_fmt in pix_fmts:
+                        # print(lightcyan(f"          {profile}: {pix_fmt}"))
                         vstream.pix_fmt = pix_fmt
                         vstream.profile = profile
                         print(lightcyan(out_media.filepath))
@@ -230,7 +233,6 @@ def main():
         out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
         for frame_rate in ("25", "50", "23.976", "29.97", "47.952", "59.94"):
-        # for frame_rate in (59.94, ):
             vstream.frame_rate = Fraction(frame_rate)
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
@@ -240,6 +242,9 @@ def main():
     if args.crf or all_tests:
         out_media.add_prop_suffix = True
         out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+        vstream.codec = VideoCodec.H265
+        vstream.profile = "main"
+        vstream.pix_fmt = PixFmt.YUV420P
         for crf in range(15, 35, 8):
             vstream.crf = crf
             print(lightcyan(out_media.filepath))
@@ -252,55 +257,36 @@ def main():
         out_media.add_prop_suffix = True
 
         vstream.codec = VideoCodec.H265
+        vstream.pix_fmt = PixFmt.YUV420P
         for preset in X26xPreset:
             vstream.preset = preset
             print(lightcyan("Preset:"), vstream.preset.value)
             denc.write(out_media, frames=out_frames)
 
         # Verify it's unused with other codecs
-        vstream.codec = VideoCodec.DNXHR
-        vstream.preset = X26xPreset.MEDIUM
-        vstream.pix_fmt = PixFmt.YUV422P10
-        print(lightcyan("Preset:"), vstream.preset.value)
+        # vstream.codec = VideoCodec.DNXHR
+        # vstream.preset = X26xPreset.MEDIUM
+        # vstream.pix_fmt = PixFmt.YUV422P10
+        # print(lightcyan("Preset:"), vstream.preset.value)
         denc.write(out_media, frames=out_frames)
 
         vstream.preset = default_settings['preset']
 
     # Color range
     if args.color_range or all_tests:
-        for vcodec in VideoCodec:
+        for vcodec, profile in codec_profile_list:
             vstream.codec = vcodec
-            if not is_codec_supported(vcodec):
-                print(lightcyan(f"\n{vcodec.value} :"), f"not supported")
-                continue
-
-            if vcodec == VideoCodec.DNXHR:
-                combos = [(DNXHR_PROFILE_PIXFMT[p], p) for p in DNXHR_PROFILE_PIXFMT]
-            else:
-                combos = [(pf, None) for pf in VCODEC_PIXFMTS[vcodec]]
+            vstream.profile = profile
+            vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
 
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
-            for pix_fmt, profile in combos:
-                vstream.pix_fmt = pix_fmt
-                vstream.profile = profile
-
-                for color_range in ColorRange:
-                    vstream.color = ColorInfo(range=color_range)
-                    print(lightcyan(f"\nColor range:"), color_range.value)
-                    denc.write(out_media, frames=out_frames)
-
-
-            vstream.codec = default_settings['codec']
-            vstream.pix_fmt = default_settings['pix_fmt']
-
-    # print(lightcyan(f"h265"))
-    # out_media.video.filepath = "h265_yuv422p10_rec709_veryfast.mkv"
-    # vstream.codec = VideoCodec.H265
-    # vstream.pix_fmt = PixFmt.YUV422P10
-    # denc.write(out_media, frames=out_frames)
-
+            for color_range in ColorRange:
+                vstream.color = ColorInfo(range=color_range)
+                print(lightcyan(out_media.filepath))
+                print(lightcyan(f"\nColor range:"), color_range.value)
+                denc.write(out_media, frames=out_frames)
 
 
 

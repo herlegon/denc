@@ -120,6 +120,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     requested_pix_fmt = vstream.pix_fmt
     ffmpeg_pix_fmt: str = to_ffmpeg_pixfmt(vcodec=vcodec, pixfmt=requested_pix_fmt)
     pix_fmt_args: list[str] = ["-pix_fmt", ffmpeg_pix_fmt]
+    # print(red(f"requested: {requested_pix_fmt} -> {pix_fmt_args}"))
 
     # Profiles
     profile = effective_profile(vcodec, vstream.profile)
