@@ -26,8 +26,6 @@ class ColorRange(str, Enum):
 
 
 
-
-
 @dataclass
 class ColorInfo:
     matrix: ColorSpace | None = None
@@ -75,11 +73,18 @@ def ffmpeg_color_range(
     return filters, args
 
 
+# ColorSpace.REC601_PAL     bt470bg     gamma28     bt470bg
+# ColorSpace.REC601_NTSC    smpte170m   smpte170m   smpte170m
+# ColorSpace.REC70          bt709       bt709       bt709
+# ColorSpace.BT2020NC       bt2020      bt2020-10   bt2020-10
+# ColorSpace.BT2020C        bt2020      bt2020-10   bt2020-10
+
+
 
 colorspace_to_params = {
-    # colorspace, primaries, transfer
+    # colorspace, primaries, transfer (trc)
     ColorSpace.UNKNOWN: ("unknown", "unknown", "unknown"),
-    ColorSpace.REC601_PAL: ("bt470bg", "bt470bg", "gamma28"),
+    ColorSpace.REC601_PAL: ("bt470bg", "bt470bg", "gamma28"), # bt470bg for x265
     ColorSpace.REC601_NTSC: ("smpte170m", "smpte170m", "smpte170m"),
     ColorSpace.REC709: ("bt709", "bt709", "bt709"),
     ColorSpace.BT2020NC: ("bt2020nc", "bt2020", "bt2020-10"),
@@ -89,6 +94,33 @@ colorspace_to_params.update({
     ColorSpace.BT709: colorspace_to_params[ColorSpace.REC709]
 })
 
+# transfer names that differ between ffmpeg and x264/x265
+X26X_TRANSFER: dict[str, str] = {"gamma28": "bt470bg"}
+
+# gamma28 is only accepted by the generic -color_trc option.
+# setparams, x264 and x265 call the same transfer bt470bg.
+ALT_TRC_NAME: dict[str, str] = {"gamma28": "bt470bg"}
+
+def ffmpeg_colorspace_args(
+    colorspace: ColorSpace | None,
+    vcodec: VideoCodec,
+) -> list[str]:
+    if colorspace is None or colorspace == ColorSpace.UNKNOWN:
+        return []
+
+    space, prim, trc = colorspace_to_params[colorspace]
+    alt_trc: str = ALT_TRC_NAME.get(trc, trc)
+
+    args: list[str] = []
+    if vcodec == VideoCodec.H264:
+        args = ["-x264-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
+    elif vcodec == VideoCodec.H265:
+        args = ["-x265-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
+    elif vcodec == VideoCodec.DNXHR:
+        args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
+
+    args += ["-colorspace", space, "-color_primaries", prim, "-color_trc", trc]
+    return args
 
 
 not_supported_colorspace: dict[VideoCodec, list[ColorSpace]] = {
@@ -98,33 +130,3 @@ not_supported_colorspace: dict[VideoCodec, list[ColorSpace]] = {
     VideoCodec.DNXHR: [ColorSpace.REC601_PAL, ColorSpace.REC601_NTSC],
     VideoCodec.VP9: [],
 }
-
-
-
-
-def ffmpeg_colorspace_args(
-    colorspace: ColorSpace | None,
-    vcodec: VideoCodec,
-) -> list[str]:
-    args: list[str] = []
-    if colorspace is not None:
-        space, prim, trc = colorspace_to_params[colorspace]
-        if vcodec == VideoCodec.H264:
-            args = [
-                "-x264-params", f"colormatrix={space}:colorprim={prim}:transfer={trc}"
-            ]
-            args.extend(
-                ["-colorspace", space, "-color_primaries", prim, "-color_trc", trc]
-            )
-
-        elif vcodec == VideoCodec.H265:
-            args = [
-                "-x265-params", f"colorprim={prim}:transfer={trc}:colormatrix={space}"
-            ]
-
-        elif vcodec == VideoCodec.DNXHR:
-            args = [
-                "-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={trc}"
-            ]
-
-    return args

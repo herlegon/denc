@@ -43,14 +43,6 @@ vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
 }
 
 
-class ProResProfile(IntEnum):
-    Proxy = 0
-    LT = 1
-    Standard = 2    # ProRes 422
-    HQ = 3
-    HQ_ALPHA = 4
-
-
 # default profile
 vcodec_default_profile: dict[VideoCodec, str] = {
     VideoCodec.H264: "",

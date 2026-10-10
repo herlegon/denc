@@ -10,6 +10,8 @@ from torch.cuda import StreamContext
 from typing import TYPE_CHECKING
 import warnings
 
+from hytils import red
+
 from .media_stream import MediaStream
 from .np_dtypes import np_to_float32
 from .tools import ffmpeg_exe

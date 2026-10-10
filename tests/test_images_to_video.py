@@ -9,12 +9,10 @@ import signal
 import sys
 import time
 from typing import Any
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import numpy as np
 from hytils import lightcyan, red
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import denc
 from denc import (
     MediaStream,
@@ -28,47 +26,24 @@ from denc import (
     VCODEC_PIXFMTS,
     DNXHR_PROFILE_PIXFMT,
     VCODEC_PROFILES,
-    RGB_PREFIXES,
+    VCODEC_TUNES,
     X26xPreset,
     ColorRange,
     ColorInfo,
     default_pixfmt_for_profile,
+    AV1_PROFILE_PIXFMT,
+    H265_PROFILE_PIXFMT,
+    VP9_PROFILE_PIXFMT
 )
-from denc.profiles import AV1_PROFILE_PIXFMT, H265_PROFILE_PIXFMT, VP9_PROFILE_PIXFMT
+
 
 import torch
 
 
-# def generate_filename(media: MediaStream) -> str:
-#     vstream = media.video
 
-#     frame_rate_str = (
-#         f"{int(vstream.frame_rate)}fps"
-#         if vstream.frame_rate.is_integer()
-#         else f"{float(vstream.frame_rate):.03f}fps"
-#     )
-
-#     h, w, _ = vstream.pipe_format.shape
-#     pix_fmt: str = vstream.pix_fmt.value
-#     color_range = vstream.color.range
-#     if (
-#         not pix_fmt.startswith(RGB_PREFIXES)
-#         and vstream.color.range == ColorRange.FULL
-#     ):
-#         color_range = ColorRange.LIMITED
-
-#     filename: str = "_".join(map(str,[
-#         vstream.codec.value.lower(),
-#         f"{w}x{h}",
-#         frame_rate_str,
-#         vstream.pix_fmt.value,
-#         vstream.color.matrix.value if isinstance(vstream.color.matrix, ColorSpace) else str(vstream.color.matrix),
-#         color_range.value,
-#         f"crf{vstream.crf}",
-#         vstream.preset.value.lower(),
-#     ])) + vcodec_to_extension[vstream.codec]
-
-#     return filename
+def file_exists_and_not_empty(filepath: str | Path) -> bool:
+    p = Path(filepath)
+    return p.is_file() and p.stat().st_size > 0
 
 
 def main():
@@ -85,6 +60,7 @@ def main():
     parser.add_argument("--color_space", action="store_true", required=False)
     parser.add_argument("--color_range", action="store_true", required=False)
     parser.add_argument("--preset", action="store_true", required=False)
+    parser.add_argument("--tune", action="store_true", required=False)
     args = parser.parse_args()
     all_tests: bool = not(any(x for x in [
         args.codec,
@@ -94,6 +70,7 @@ def main():
         args.preset,
         args.color_space,
         args.color_range,
+        args.tune,
     ]))
 
 
@@ -116,7 +93,6 @@ def main():
     ])
 
     # Write images as video
-    print(lightcyan(f"h264"))
     out_media: MediaStream = denc.new()
     vstream = out_media.video
     vstream.color.matrix = ColorSpace.REC709
@@ -133,8 +109,6 @@ def main():
     vstream.frame_rate = default_settings['frame_rate']
     vstream.crf = default_settings['crf']
     vstream.preset = default_settings['preset']
-    # vstream.profile = "main"
-    # vstream.set_device(device=device, dtype=torch.float32)
 
     # pipe_format is not valid yet because it depends on the tensor
     # could be set using vstream.set_pipe_format or wait for the encoder to set it
@@ -148,19 +122,9 @@ def main():
 
     codec_profile_list: list[tuple[VideoCodec, str]] = []
     for vcodec in VideoCodec:
-        # if vcodec in (
-        #     VideoCodec.H264,
-        #     VideoCodec.H265,
-        #     VideoCodec.FFV1,
-        #     VideoCodec.DNXHR,
-        # ):
-        #     continue
         if not is_codec_supported(vcodec):
             print(lightcyan(f"\n{vcodec.value} :"), f"not supported")
             continue
-
-        # if vcodec not in (VideoCodec.DNXHR, VideoCodec.H265,):
-        #     codec_profile_list.append((vcodec, None))
 
         if VCODEC_PROFILES.get(vcodec):
             for p in VCODEC_PROFILES[vcodec]:
@@ -168,14 +132,13 @@ def main():
         else:
             codec_profile_list.append((vcodec, None))
 
-    pprint(codec_profile_list)
+    out_video_filenames = []
 
 
     # codec
     if args.codec or all_tests:
+        print(lightcyan(f"CODECS\n{'-'*60}"))
         for vcodec, profile in codec_profile_list:
-            # if vcodec != VideoCodec.AV1_NVENC:
-            #     continue
             vstream.codec = vcodec
             vstream.profile = profile
             vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
@@ -184,18 +147,18 @@ def main():
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
             print(lightcyan(f"\n{vcodec.value}:"), out_media.filepath)
             denc.write(out_media, frames=out_frames)
+            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
         vstream.codec = default_settings['codec']
-        vstream.pix_fmt = default_settings['pix_fmt']
 
 
     # pixel Format
     if args.pix_fmt or all_tests:
+        print(lightcyan(f"PIX_FMTS\n{'-'*60}"))
         for vcodec, profile in codec_profile_list:
-            # if vcodec != VideoCodec.VP9:
-            #     continue
             vstream.codec = vcodec
+            vstream.pix_fmt = default_settings['pix_fmt']
             out_media.add_prop_suffix = True
-            out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+            filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
             if vcodec == VideoCodec.DNXHR:
                 profile_pixfmt = [(p, DNXHR_PROFILE_PIXFMT[p]) for p in DNXHR_PROFILE_PIXFMT]
@@ -216,81 +179,166 @@ def main():
                         # print(lightcyan(f"          {profile}: {pix_fmt}"))
                         vstream.pix_fmt = pix_fmt
                         vstream.profile = profile
-                        print(lightcyan(out_media.filepath))
+                        out_media.filepath = filepath_template
+                        print(lightcyan(f"\n{vcodec.value}:"), pix_fmt)
                         denc.write(out_media, frames=out_frames)
+                        assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+                        out_video_filenames.append(out_media.filepath.name)
                 else:
                     vstream.pix_fmt = pix_fmts
                     vstream.profile = profile
+                    out_media.filepath = filepath_template
                     print(lightcyan(out_media.filepath))
                     denc.write(out_media, frames=out_frames)
+                    assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+                    out_video_filenames.append(out_media.filepath.name)
 
-            vstream.codec = default_settings['codec']
-            vstream.pix_fmt = default_settings['pix_fmt']
 
     # frame rates
     if args.fps or all_tests:
+        print(lightcyan(f"FPS\n{'-'*60}"))
         out_media.add_prop_suffix = True
-        out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+        filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+        vstream.pix_fmt = default_settings['pix_fmt']
+        vstream.codec = default_settings['codec']
 
         for frame_rate in ("25", "50", "23.976", "29.97", "47.952", "59.94"):
             vstream.frame_rate = Fraction(frame_rate)
-            print(lightcyan(out_media.filepath))
+            out_media.filepath = filepath_template
+            print(lightcyan(f"\nFramerate:"), frame_rate)
             denc.write(out_media, frames=out_frames)
-        vstream.frame_rate = default_settings['frame_rate']
+            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+            out_video_filenames.append(out_media.filepath.name)
+
 
     # crf
     if args.crf or all_tests:
+        print(lightcyan(f"CRF\n{'-'*60}"))
         out_media.add_prop_suffix = True
-        out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
         vstream.codec = VideoCodec.H265
+        vstream.frame_rate = default_settings['frame_rate']
         vstream.profile = "main"
         vstream.pix_fmt = PixFmt.YUV420P
+        filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+
         for crf in range(15, 35, 8):
+            print(lightcyan(f"CRF:"), crf)
             vstream.crf = crf
+            out_media.filepath = filepath_template
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
+            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+            out_video_filenames.append(out_media.filepath.name)
         vstream.crf = default_settings['crf']
 
     # presets
     if args.preset or all_tests:
-        out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+        print(lightcyan(f"PRESETS\n{'-'*60}"))
         out_media.add_prop_suffix = True
+        filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
         vstream.codec = VideoCodec.H265
         vstream.pix_fmt = PixFmt.YUV420P
         for preset in X26xPreset:
             vstream.preset = preset
+            out_media.filepath = filepath_template
             print(lightcyan("Preset:"), vstream.preset.value)
             denc.write(out_media, frames=out_frames)
+            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+            out_video_filenames.append(out_media.filepath.name)
 
         # Verify it's unused with other codecs
         # vstream.codec = VideoCodec.DNXHR
         # vstream.preset = X26xPreset.MEDIUM
         # vstream.pix_fmt = PixFmt.YUV422P10
         # print(lightcyan("Preset:"), vstream.preset.value)
-        denc.write(out_media, frames=out_frames)
+
 
         vstream.preset = default_settings['preset']
 
+    # tunes
+    if args.tune or all_tests:
+        print(lightcyan(f"TUNES\n{'-'*60}"))
+        out_media.add_prop_suffix = True
+        filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+
+        vstream.codec = VideoCodec.H264
+        vstream.pix_fmt = PixFmt.YUV420P
+        vstream.preset = None
+        for tune in VCODEC_TUNES[vstream.codec]:
+            vstream.tune = tune
+            out_media.filepath = filepath_template
+            print(lightcyan(f"\nTune: {vstream.tune}"))
+            denc.write(out_media, frames=out_frames)
+            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+            out_video_filenames.append(out_media.filepath.name)
+
+
+        vstream.preset = default_settings['preset']
+
+
     # Color range
     if args.color_range or all_tests:
+        print(lightcyan(f"COLOR RANGE\n{'-'*60}"))
         for vcodec, profile in codec_profile_list:
             vstream.codec = vcodec
             vstream.profile = profile
+            vstream.tune = None
             vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
 
             out_media.add_prop_suffix = True
-            out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+            filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
             for color_range in ColorRange:
                 vstream.color = ColorInfo(range=color_range)
+                out_media.filepath = filepath_template
                 print(lightcyan(out_media.filepath))
                 print(lightcyan(f"\nColor range:"), color_range.value)
                 denc.write(out_media, frames=out_frames)
+                assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+                out_video_filenames.append(out_media.filepath.name)
 
 
+    # Color space
+    if args.color_space or all_tests:
+        print(lightcyan(f"COLOR SPACES\n{'-'*60}"))
+        for vcodec in VideoCodec:
+            if not is_codec_supported(vcodec):
+                continue
+            vstream.codec = vcodec
+            profile = None
+            if vcodec == VideoCodec.DNXHR:
+                profile = "dnxhr_hq"
+            vstream.profile = profile
+            vstream.color = None
+            vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
+
+            out_media.add_prop_suffix = True
+            filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
+
+            for space in (
+                # ColorSpace.UNKNOWN,
+                ColorSpace.REC601_PAL,
+                ColorSpace.REC601_NTSC,
+                # ColorSpace.REC709,
+                ColorSpace.BT709,
+                # ColorSpace.BT2020NC,
+                # ColorSpace.BT2020C,
+            ):
+                vstream.color = ColorInfo(
+                    matrix=space, primaries=space, transfer=space
+                )
+                print()
+                print()
+                out_media.filepath = filepath_template
+                print(lightcyan(out_media.filepath))
+                print(lightcyan(f"\nColor space:"), space)
+                denc.write(out_media, frames=out_frames)
+                assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+                out_video_filenames.append(out_media.filepath.name)
 
     print("\nEnded.")
+    pprint(out_video_filenames)
 
 
 

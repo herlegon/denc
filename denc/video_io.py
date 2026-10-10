@@ -22,7 +22,7 @@ from .media_stream import (
     SubtitleInfo,
     VideoStream,
 )
-from .pxl_fmt import PIXEL_FORMATS, PixFmt
+from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
 from .tools import ffprobe_exe
 from .time_conversions import FrameRate
 from .vcodec import VideoCodec, supported_video_exts
@@ -149,18 +149,26 @@ def open(filepath: Path) -> MediaStream | None:
     )
 
     # Pixel format
-    pix_fmt = v_stream.get('pix_fmt', None)
+    pix_fmt_str = v_stream.get('pix_fmt', None)
     try:
-        pixel_format = PIXEL_FORMATS[pix_fmt]
+        pixel_format = PIXEL_FORMATS[pix_fmt_str]
     except KeyError as e:
         raise ValueError(
-            f"Unknown pixel format {pix_fmt!r} "
+            f"Unknown pixel format {pix_fmt_str!r} "
             f"for {in_video_fp}"
         ) from e
 
     is_supported: bool = pixel_format["supported"]
     if not is_supported:
-        warn(yellow(f"{pix_fmt} is not supported"))
+        warn(yellow(f"{pix_fmt_str} is not supported"))
+
+    try:
+        pix_fmt = PixFmt(pix_fmt_str)
+    except:
+        pix_fmt = _EXTRA_PIX_FMT_MAP.get(pix_fmt_str)
+        if pix_fmt is None:
+            raise NotImplementedError(yellow(f"{pix_fmt_str} is not supported"))
+
 
     # Frame shape
     shape = (v_stream["height"], v_stream["width"], pixel_format["nc"])
@@ -258,17 +266,20 @@ def open(filepath: Path) -> MediaStream | None:
     }.get(vcodec_name, vcodec_name)
     if not vcodec_name:
         raise NotImplementedError(f"Video Codec \'{vcodec_name}\' is not supported")
-    v_codec = VideoCodec(vcodec_name)
+
+
     v_profile = ""
-    if v_codec == VideoCodec.DNXHR:
+    if vcodec_name.lower() == "dnxhd":
         # if DNxHR, profile has to be used too
         v_profile = v_stream.get("profile", "").lower()
         if "dnxhr" in v_profile:
             v_codec = VideoCodec.DNXHR
-            for p in VCODEC_PROFILES[VideoCodec.DNXHR].available:
+            for p in VCODEC_PROFILES[VideoCodec.DNXHR]:
                 if p in v_profile:
-                    v_profile = p.upper()
+                    v_profile = p
                     break
+    else:
+        v_codec = VideoCodec(vcodec_name)
 
     # Video stream
     video_info = VideoStream(

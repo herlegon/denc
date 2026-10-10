@@ -16,29 +16,33 @@ from torch.cuda import StreamContext
 from typing import IO, TYPE_CHECKING
 
 from .capabilities import is_codec_supported
-from .color_space import ColorRange, ColorSpace, effective_color_range, ffmpeg_color_range, ffmpeg_colorspace_args
+from .tools import ffmpeg_exe
+
 from .dh_transfers import dtoh_transfer
 from .vstream import (
     OutVideoStream,
     PipeFormat,
     VideoCodec,
 )
-
 from .vcodec import (
-    CRF_RANGES,
-    VCODECS_PRESETS,
-    X26xPreset,
-    effective_crf,
     to_ffmpeg_pixfmt,
     vcodec_to_ffmpeg_vcodec,
 )
 from .profiles import (
-    VCODEC_PROFILES,
     check_profile_pixfmt,
     effective_profile
 )
+from .tunes import effective_tune
+from .color_space import (
+    ColorRange,
+    ColorSpace,
+    effective_color_range,
+    ffmpeg_color_range,
+    ffmpeg_colorspace_args,
+)
+from .crf import effective_crf
+from .presets import effective_preset
 from .np_dtypes import np_to_uint16, np_to_uint8
-from .tools import ffmpeg_exe
 from .dlogger import dlogger
 from .torch_tensor import (
     np_to_torch_dtype,
@@ -76,20 +80,6 @@ def pretty_print_cmd(args: list[str]) -> str:
 
 
 
-def effective_preset(vcodec: VideoCodec, preset: X26xPreset) -> X26xPreset | None:
-    """Preset really sent to ffmpeg, None if not applicable."""
-    if (
-        preset is not None
-        and vcodec in VCODECS_PRESETS
-        and preset in VCODECS_PRESETS[vcodec]
-    ):
-        return preset
-    return None
-
-
-
-
-
 def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
 
     pipe: PipeFormat = vstream.pipe_format
@@ -101,7 +91,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     # else:
     #     raise NotImplementedError(f"not supported: {pipe_pixel_format}")
 
-    dlogger.info(f"""{purple("Encoder pipe:")}
+    dlogger.debug(f"""{purple("Encoder pipe:")}
           vstream.pix_fmt: {vstream.pix_fmt.value}
           shape: {pipe.shape}
           dtype: {pipe.dtype}
@@ -123,17 +113,23 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     # print(red(f"requested: {requested_pix_fmt} -> {pix_fmt_args}"))
 
     # Profiles
-    profile = effective_profile(vcodec, vstream.profile)
+    profile = effective_profile(vcodec, vstream.profile, pixfmt=requested_pix_fmt)
     if vcodec == VideoCodec.DNXHR and not profile:
         raise ValueError(red(f"missing profile for DNxHR"))
     profile_args: list[str] = ["-profile:v", profile] if profile else []
 
     # Verify that the pixfmt is supported for this profile
-    supported = check_profile_pixfmt(vcodec=vcodec, profile=profile, pixfmt=requested_pix_fmt)
+    check_profile_pixfmt(vcodec=vcodec, profile=profile, pixfmt=requested_pix_fmt)
 
     # Preset: not applicable for AV1, VP9, PRORES, or any hw-accel encoder
     preset_value = effective_preset(vcodec, vstream.preset)
     preset_args: list[str] = ["-preset", preset_value.value] if preset_value else []
+
+    # Tune: only for x264, x265 and NVENC
+    tune = effective_tune(vcodec, vstream.tune)
+    if vstream.tune is not None and tune is None:
+        dlogger.warning(yellow(f"Tune `{vstream.tune}` ignored for {vcodec.name}"))
+    tune_args: list[str] = ["-tune", tune] if tune else []
 
     # crf range
     crf = effective_crf(vcodec, vstream.crf)
@@ -228,10 +224,12 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
 
 
     # Add suffix (mainly used for unitary tests)
-    filepath = vstream.filepath
+    filepath = vstream.parent.filepath
     if vstream.parent.add_prop_suffix:
         suffix = generate_video_basename_suffix(vstream=vstream)
         filepath = filepath.with_name(f"{filepath.stem}_{suffix}{filepath.suffix}")
+        vstream.filepath = filepath
+        vstream.parent.filepath = filepath
 
     # Create command as a list
     h, w = pipe.shape[:2]
@@ -254,6 +252,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
         *vcodec_options,
 
         *profile_args,
+        *tune_args,
         *crf_args,
         *preset_args,
         *codec_params,
@@ -401,9 +400,12 @@ def write(
 
     # Sync filepath: media.filepath may have been set after construction
     if media.filepath is not None:
-        from pathlib import Path
-        media.video.filepath = Path(media.filepath) if not isinstance(media.filepath, Path) else media.filepath
-
+        media.video.filepath = (
+            Path(media.filepath)
+            if not isinstance(media.filepath, Path)
+            else media.filepath
+        )
+    print(lightgreen(media.video.filepath))
     # Generate the FFmpeg command
     e_command = generate_encoder_command(vstream=media.video)
     # And create the subprocess
@@ -475,17 +477,19 @@ def generate_video_basename_suffix(vstream: OutVideoStream) -> str:
 
     crf = effective_crf(vcodec, vstream.crf)
     preset = effective_preset(vcodec, vstream.preset)
-    profile = effective_profile(vcodec, vstream.profile)
+    profile = effective_profile(vcodec, vstream.profile, vstream.pix_fmt)
+    tune = effective_tune(vcodec, vstream.tune)
 
     # None / empty parts are skipped
     parts: list[str | None] = [
         f"{w}x{h}",
         vcodec.value.lower(),
         profile.replace("dnxhr_", "") if profile else None,
-        vstream.pix_fmt.value,
+        vstream.pix_fmt.value.replace('le', ''),
         frame_rate_str,
         matrix_str,
         effective_color_range(vstream.pix_fmt.value).value,
+        f"{tune}" if tune is not None else None,
         f"crf{crf}" if crf is not None else None,
         preset.value.lower() if preset else None,
     ]

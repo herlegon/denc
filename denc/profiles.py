@@ -1,6 +1,5 @@
 
 from enum import IntEnum
-
 from .pxl_fmt import PixFmt
 from .vcodec import VideoCodec
 
@@ -23,12 +22,10 @@ VCODEC_PROFILES: dict[VideoCodec, tuple[str, ...]] = {
 }
 
 
-DNXHR_PROFILE_PIXFMT = {
-    "dnxhr_lb": PixFmt.YUV422P,
-    "dnxhr_sq": PixFmt.YUV422P,
-    "dnxhr_hq": PixFmt.YUV422P,
-    "dnxhr_hqx": PixFmt.YUV422P10,
-    "dnxhr_444": PixFmt.YUV444P10,
+H264_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
+    "baseline": (PixFmt.YUV420P,),
+    "main":     (PixFmt.YUV420P,),
+    "high":     (PixFmt.YUV420P,),
 }
 
 
@@ -40,8 +37,18 @@ H265_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "main444-10": (PixFmt.YUV444P10,),
 }
 
+
+DNXHR_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
+    "dnxhr_lb": (PixFmt.YUV422P,),
+    "dnxhr_sq": (PixFmt.YUV422P,),
+    "dnxhr_hq": (PixFmt.YUV422P,),
+    "dnxhr_hqx": (PixFmt.YUV422P10,),
+    "dnxhr_444": (PixFmt.YUV444P10,),
+}
+
+
 AV1_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
-    "main": (PixFmt.YUV420P, PixFmt.YUV422P10),
+    "main": (PixFmt.YUV420P, PixFmt.YUV420P10),
 }
 
 
@@ -53,27 +60,46 @@ VP9_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
 }
 
 
+PRORES_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
+    "proxy":    (PixFmt.YUV422P10,),
+    "lt":       (PixFmt.YUV422P10,),
+    "standard": (PixFmt.YUV422P10,),
+    "hq":       (PixFmt.YUV422P10,),
+    "4444":     (PixFmt.YUV444P10,),
+    "4444xq":   (PixFmt.YUV444P10,),
+}
+
+
+VCODEC_PROFILE_PIXFMT: dict[VideoCodec, dict[str, tuple[PixFmt, ...]]] = {
+    VideoCodec.H264: H264_PROFILE_PIXFMT,
+    VideoCodec.H265: H265_PROFILE_PIXFMT,
+    VideoCodec.DNXHR: DNXHR_PROFILE_PIXFMT,
+    VideoCodec.AV1: AV1_PROFILE_PIXFMT,
+    VideoCodec.AV1_NVENC: (),
+    VideoCodec.VP9: VP9_PROFILE_PIXFMT,
+    VideoCodec.PRORES: PRORES_PROFILE_PIXFMT,
+}
+
+
 # is (profile, pixfmt) allowed ?
-def check_profile_pixfmt(vcodec: VideoCodec, profile: str, pixfmt: PixFmt) -> bool:
+def check_profile_pixfmt(vcodec: VideoCodec, profile: str, pixfmt: PixFmt):
     if vcodec == VideoCodec.DNXHR:
-        expected = DNXHR_PROFILE_PIXFMT[profile]
+        expected = DNXHR_PROFILE_PIXFMT[profile][0]
         if pixfmt != expected:
-            raise ValueError(f"{profile} needs {expected.name}, got {pixfmt.name}")
+            raise ValueError(f"H264 {profile} needs {expected.name}, got {pixfmt.name}")
 
     elif vcodec == VideoCodec.H265 and profile is not None:
-        expected = H265_PROFILE_PIXFMT[profile]
-        if pixfmt not in expected:
-            raise ValueError(f"{profile} needs {expected.name}, got {pixfmt.name}")
+        if profile is not None and pixfmt not in H265_PROFILE_PIXFMT[profile]:
+            raise ValueError(f"H265 profile {profile} does not support {pixfmt.name}")
 
     elif vcodec == VideoCodec.VP9:
-        if pixfmt not in VP9_PROFILE_PIXFMT[profile]:
+        if profile is not None and pixfmt not in VP9_PROFILE_PIXFMT[profile]:
             raise ValueError(f"VP9 profile {profile} does not support {pixfmt.name}")
 
     elif vcodec == VideoCodec.AV1:
-        if pixfmt not in AV1_PROFILE_PIXFMT[profile]:
+        if profile is not None and pixfmt not in AV1_PROFILE_PIXFMT[profile]:
             raise ValueError(f"AV1 profile {profile} does not support {pixfmt.name}")
 
-    return True
 
 
 def vp9_profile_for(pixfmt: PixFmt) -> str:
@@ -98,10 +124,16 @@ vcodec_default_pixfmt: dict[VideoCodec, str] = {
     VideoCodec.DNXHR: DNXHR_PROFILE_PIXFMT,
     VideoCodec.PRORES: PixFmt.YUV422P10,
 }
-def default_pixfmt_for_profile(vcodec: VideoCodec, profile: str) -> PixFmt:
+
+
+def default_pixfmt_for_profile(vcodec: VideoCodec, profile: str | None) -> PixFmt:
     codec_profiles: PixFmt | dict = vcodec_default_pixfmt.get(vcodec, None)
-    if codec_profiles is None:
-        return PixFmt.YUV420P
+    if codec_profiles is None or not profile:
+        return (
+            PixFmt.YUV422P10
+            if vcodec in (VideoCodec.DNXHR, VideoCodec.PRORES)
+            else PixFmt.YUV420P
+        )
 
     if isinstance(codec_profiles, dict):
         if profile is None:
@@ -114,28 +146,24 @@ def default_pixfmt_for_profile(vcodec: VideoCodec, profile: str) -> PixFmt:
         return codec_profiles
 
 
+DNXHR_DEFAULT_PROFILE: dict[PixFmt, str] = {
+    PixFmt.YUV422P:   "dnxhr_hq",
+    PixFmt.YUV422P10: "dnxhr_hqx",
+    PixFmt.YUV444P10: "dnxhr_444",
+}
 
 
-class ProResProfile(IntEnum):
-    Proxy = 0
-    LT = 1
-    Standard = 2    # ProRes 422
-    HQ = 3
-    HQ_ALPHA = 4
-
-
-
-
-
-
-
-
-def effective_profile(vcodec: VideoCodec, profile: str | None) -> str | None:
+def effective_profile(vcodec: VideoCodec, profile: str | None, pixfmt: PixFmt) -> str | None:
     """Profile really sent to ffmpeg, None if not applicable."""
+    if vcodec == VideoCodec.DNXHR and profile is None:
+        # without a dnxhr_* profile, ffmpeg falls back to classic DNxHD (fixed frame sizes only)
+        return DNXHR_DEFAULT_PROFILE[pixfmt]
+
     if (
         vcodec in VCODEC_PROFILES
         and profile in VCODEC_PROFILES[vcodec]
         and vcodec != VideoCodec.AV1_NVENC
     ):
         return profile
+
     return None

@@ -10,7 +10,7 @@ from .dlogger import dlogger
 
 class PixFmt(Enum):
     YUV420P = "yuv420p"
-    YUV420P10 = "yuv420p10"
+    YUV420P10 = "yuv420p10le"
     YUV420P12 = "yuv420p12le"
     YUV422P = "yuv422p"
     YUV422P10 = "yuv422p10le"
@@ -22,6 +22,12 @@ class PixFmt(Enum):
     RGB48 = "rgb48le"
     RGBA24 = "rgba24"
     RGBA48 = "rgba48le"
+PIX_FMT_MAP = {k.lower(): v for k, v in PixFmt.__members__.items()}
+
+_EXTRA_PIX_FMT_MAP = {
+    "bgr0": PixFmt.RGB24,
+    "gbrp16le": PixFmt.RGB48,
+}
 
 
 RGB_PREFIXES = ("gbr", "bgr", "rgb")

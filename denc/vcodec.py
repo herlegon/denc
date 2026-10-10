@@ -1,10 +1,6 @@
 from __future__ import annotations
-import functools
-import os
-import sys
-from pathlib import Path
 from dataclasses import dataclass
-from enum import Enum, IntEnum
+from enum import Enum
 from .pxl_fmt import PixFmt
 
 
@@ -83,26 +79,6 @@ vcodec_to_ffmpeg_vcodec: dict[VideoCodec, str] = {
 
 
 
-
-# Platform-dependent FFmpeg options for hardware codecs:
-# - Input options (BEFORE -i): e.g. -vaapi_device on Linux
-#   Note: rawvideo pipe inputs do NOT use -hwaccel cuda (decoder option).
-# Output options (AFTER -i, applying to the encoder/output)
-vcodec_output_opts: dict[VideoCodec, list[str]] = {}
-
-
-# if IS_WINDOWS:
-#     # Windows: AMD AMF (native on Windows for AMD Radeon GPUs)
-#     for k in _AMF_CODECS:
-#         vcodec_output_opts[k] = ["-rc", "cqp"]
-
-# Legacy alias
-vcodec_opts: dict[VideoCodec, list[str]] = {
-    **vcodec_output_opts,
-}
-
-
-
 vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.H264: ".mkv",
     VideoCodec.H265: ".mkv",
@@ -120,6 +96,7 @@ vcodec_to_extension: dict[VideoCodec, str] = {
     VideoCodec.H264_AMF: ".mkv",
     VideoCodec.HEVC_AMF: ".mkv",
 }
+
 
 
 VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
@@ -201,89 +178,6 @@ def to_ffmpeg_pixfmt(vcodec: VideoCodec, pixfmt: PixFmt) -> str:
         )
     return VCODEC_PIXFMT_OVERRIDES.get(vcodec, {}).get(pixfmt, PIXFMT_TO_FFMPEG[pixfmt])
 
-
-
-CRF_CODECS = {
-    VideoCodec.H264,   # libx264 : 0-51
-    VideoCodec.H265,   # libx265 : 0-51
-    VideoCodec.VP9,    # libvpx-vp9 : 0-63, à combiner avec -b:v 0
-    VideoCodec.AV1,    # libsvtav1 : 0-63
-}
-
-
-def effective_crf(vcodec: VideoCodec, crf: int) -> int | None:
-    """CRF really sent to ffmpeg (clamped), None if the codec has no CRF."""
-    if vcodec not in CRF_RANGES:
-        return None
-    lo, hi = CRF_RANGES[vcodec][:2]
-    return max(lo, min(crf, hi))
-
-
-
-PRESET_CODECS = {
-    VideoCodec.H264,        # libx264 : ultrafast ... veryslow
-    VideoCodec.H265,        # libx265 : ultrafast ... veryslow
-    VideoCodec.AV1,         # libsvtav1 : 0-13 (numérique, 0 = le plus lent)
-    VideoCodec.H264_NVENC,  # p1-p7 (p1 = le plus rapide)
-    VideoCodec.HEVC_NVENC,  # p1-p7
-    VideoCodec.AV1_NVENC,   # p1-p7
-}
-
-
-# presets
-class X26xPreset(str, Enum):
-    ULTRAFAST = "ultrafast"
-    SUPERFAST = "superfast"
-    VERYFAST = "veryfast"
-    FASTER = "faster"
-    FAST = "fast"
-    MEDIUM = "medium"
-    SLOW = "slow"
-    SLOWER = "slower"
-    VERYSLOW = "veryslow"
-    PLACEBO = "placebo"
-X26X_PRESETS = [preset for preset in X26xPreset]
-
-
-
-
-# (min, max, default)
-CRF_RANGES: dict[VideoCodec, tuple[int, int, int]] = {
-    VideoCodec.H264: (0, 51, 23),
-    VideoCodec.H265: (0, 51, 28),
-    VideoCodec.VP9:  (0, 63, 31),   # nécessite aussi -b:v 0
-    VideoCodec.AV1:  (0, 63, 35),   # libsvtav1
-}
-
-# valeurs autorisées, de la plus rapide à la plus lente
-# (sauf AV1 : 0 = la plus lente, 13 = la plus rapide)
-VCODECS_PRESETS: dict[VideoCodec, list[str]] = {
-    VideoCodec.H264: X26X_PRESETS,
-    VideoCodec.H265: X26X_PRESETS,
-    VideoCodec.AV1: [str(i) for i in range(0, 14)],   # 0-13
-    VideoCodec.H264_NVENC: [f"p{i}" for i in range(1, 8)],   # p1 (rapide) - p7 (lent)
-    VideoCodec.HEVC_NVENC: [f"p{i}" for i in range(1, 8)],
-    VideoCodec.AV1_NVENC: [f"p{i}" for i in range(1, 8)],
-}
-
-
-
-VCODECS_WITHOUT_CRF = (
-    VideoCodec.DNXHR,
-    VideoCodec.PRORES,
-    VideoCodec.H264_NVENC,
-    VideoCodec.HEVC_NVENC,
-    VideoCodec.AV1_NVENC,
-    VideoCodec.H264_AMF,
-    VideoCodec.HEVC_AMF,
-)
-
-VCODECS_WITH_CRF = {
-    VideoCodec.H264,
-    VideoCodec.H265,
-    VideoCodec.AV1,
-    VideoCodec.VP9,
-}
 
 
 

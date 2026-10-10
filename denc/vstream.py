@@ -4,32 +4,31 @@ from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
 from pathlib import Path
-from hytils import path_split, red
+from hytils import purple, red
 import math
 import numpy as np
-import os
 import torch
 from typing import Any, Literal, Optional, TYPE_CHECKING
 from warnings import warn
 
-from .color_space import (
-    ColorInfo,
-    ColorRange,
-    ColorSpace,
-)
-from .pxl_fmt import PIXEL_FORMATS
 from .torch_tensor import np_to_torch_dtype
 from .time_conversions import FrameRate
+
 from .vcodec import (
-    X26X_PRESETS,
     Ffv1CodecOption,
     PixFmt,
     VideoCodec,
-    X26xPreset,
     vcodec_to_extension,
 )
 from .profiles import (
     VCODEC_PROFILES,
+)
+from .presets import X26xPreset
+from .pxl_fmt import PIXEL_FORMATS
+from .color_space import (
+    ColorInfo,
+    ColorRange,
+    ColorSpace,
 )
 if TYPE_CHECKING:
     from .media_stream import MediaStream
@@ -105,6 +104,7 @@ class VideoStream:
     field_order: FieldOrder = FieldOrder.PROGRESSIVE
 
     profile: Optional[str] = ""
+    tune: str | None = None
 
     color: ColorInfo = field(default_factory=ColorInfo)
 
@@ -117,6 +117,7 @@ class VideoStream:
 
 
     def __post_init__(self):
+        print(purple(self.pix_fmt))
         pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
         if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
             pipe_dtype: torch.dtype = torch.uint8
