@@ -230,9 +230,12 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
     stdout.append(f"{'duration':<{ROW_HEADER_WIDTH}} | {vstream.duration:<{COLUMN_WIDTH}}  |  {file_vstream.duration}")
     stdout.append(f"{'frame count':<{ROW_HEADER_WIDTH}} | {vstream.frame_count:<{COLUMN_WIDTH}}  |  {file_vstream.frame_count}")
 
-    stdout.append(f"{'matrix':<{ROW_HEADER_WIDTH}} | {vstream.color.matrix:<{COLUMN_WIDTH}}  |  {file_vstream.color.matrix}")
-    stdout.append(f"{'primary':<{ROW_HEADER_WIDTH}} | {vstream.color.primaries:<{COLUMN_WIDTH}}  |  {file_vstream.color.primaries}")
-    stdout.append(f"{'transfer':<{ROW_HEADER_WIDTH}} | {vstream.color.transfer:<{COLUMN_WIDTH}}  |  {file_vstream.color.transfer}")
+    in_matrix = vstream.color.matrix
+    stdout.append(f"{'matrix':<{ROW_HEADER_WIDTH}} | {in_matrix if in_matrix else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.matrix}")
+    in_primaries = vstream.color.primaries
+    stdout.append(f"{'primary':<{ROW_HEADER_WIDTH}} | {in_primaries if in_primaries else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.primaries}")
+    in_transfer = vstream.color.transfer
+    stdout.append(f"{'transfer':<{ROW_HEADER_WIDTH}} | {in_transfer if in_transfer else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.transfer}")
 
 
     in_range = vstream.color.range

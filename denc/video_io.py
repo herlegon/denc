@@ -14,7 +14,7 @@ from pprint import pformat, pprint
 import subprocess
 from warnings import warn
 
-from .color_space import ColorInfo, ColorRange
+from .color_space import ColorInfo, ColorRange, ColorSpace
 
 from .media_stream import (
     AudioInfo,
@@ -188,9 +188,9 @@ def open(filepath: Path) -> MediaStream | None:
     #   color_primaries -> chromatic primaries
     #   color_transfer  -> transfer characteristic
     color_info = ColorInfo(
-        matrix=v_stream.get("color_space"),
-        primaries=v_stream.get("color_primaries"),
-        transfer=v_stream.get("color_transfer"),
+        matrix=ColorSpace(v_stream.get("color_space", "unknown")),
+        primaries=ColorSpace(v_stream.get("color_primaries", "unknown")),
+        transfer=ColorSpace(v_stream.get("color_transfer", "unknown")),
         range=_parse_color_range(v_stream.get("color_range")),
     )
 
