@@ -1,14 +1,15 @@
 from enum import Enum
-from pprint import pprint
+from pprint import pformat, pprint
 import re
 from dataclasses import dataclass, fields
 from pathlib import Path
 import signal
 import sys
 
-from hytils import lightcyan
+from hytils import lightcyan, lightgreen, red
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import denc
 from denc import (
     VideoCodec,
     PixFmt,
@@ -20,6 +21,8 @@ from denc import (
     VCODEC_PROFILE_PIXFMT,
     OutVideoStream,
     vcodec_to_extension,
+    dlogger,
+    MediaStream,
 )
 from denc.color_space import effective_color_range
 from denc.crf import effective_crf
@@ -183,3 +186,132 @@ def compare_vstream_to_filename(
     return mismatches
 
 
+
+
+
+def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
+    stdout: list[str] = []
+    vstream = out_media.video
+
+    print(lightcyan(f"\nParse generated file"))
+    file_media: MediaStream = denc.open(out_media.filepath)
+
+    stdout.append(f"\nInput\n{'-'*32}")
+    stdout.append(pformat(out_media.video))
+
+    stdout.append(f"\nGenerated\n{'-'*32}")
+    file_vstream = file_media.video
+    stdout.append(pformat(file_vstream))
+    stdout.append("")
+
+    COLUMN_WIDTH: int = 18
+    ROW_HEADER_WIDTH: int = 20
+
+    total_width = ROW_HEADER_WIDTH + (COLUMN_WIDTH * 2) + 10
+    header = (
+        f"{' ':<{ROW_HEADER_WIDTH}} | {'Input':<{COLUMN_WIDTH}}  |  {'Generated':<{COLUMN_WIDTH}}"
+    )
+    stdout.append(f"{header}\n{"-" * total_width}")
+
+    h, w, in_nc = vstream.shape
+    in_shape_str = f"{w} x {h}"
+    h, w, file_nc = file_vstream.shape
+    file_shape_str = f"{w} x {h}"
+    stdout.append(f"{'shape':<{ROW_HEADER_WIDTH}} | {in_shape_str:<{COLUMN_WIDTH}}  |  {file_shape_str}")
+    stdout.append(f"{'channels':<{ROW_HEADER_WIDTH}} | {in_nc:<{COLUMN_WIDTH}}  |  {file_nc}")
+    stdout.append(f"{'codec':<{ROW_HEADER_WIDTH}} | {vstream.codec:<{COLUMN_WIDTH}}  |  {file_vstream.codec}")
+    stdout.append(f"{'profile':<{ROW_HEADER_WIDTH}} | {vstream.profile:<{COLUMN_WIDTH}}  |  {file_vstream.profile}")
+    stdout.append(f"{'pix fmt':<{ROW_HEADER_WIDTH}} | {vstream.pix_fmt:<{COLUMN_WIDTH}}  |  {file_vstream.pix_fmt}")
+
+    stdout.append(f"{'is frame rate fixed':<{ROW_HEADER_WIDTH}} | {vstream.is_frame_rate_fixed:<{COLUMN_WIDTH}}  |  {file_vstream.is_frame_rate_fixed}")
+    stdout.append(f"{'frame rate (r)':<{ROW_HEADER_WIDTH}} | {vstream.frame_rate_r:<{COLUMN_WIDTH}}  |  {file_vstream.frame_rate_r}")
+    stdout.append(f"{'frame rate (avg)':<{ROW_HEADER_WIDTH}} | {vstream.frame_rate_avg:<{COLUMN_WIDTH}}  |  {file_vstream.frame_rate_avg}")
+
+    stdout.append(f"{'duration':<{ROW_HEADER_WIDTH}} | {vstream.duration:<{COLUMN_WIDTH}}  |  {file_vstream.duration}")
+    stdout.append(f"{'frame count':<{ROW_HEADER_WIDTH}} | {vstream.frame_count:<{COLUMN_WIDTH}}  |  {file_vstream.frame_count}")
+
+    stdout.append(f"{'matrix':<{ROW_HEADER_WIDTH}} | {vstream.color.matrix:<{COLUMN_WIDTH}}  |  {file_vstream.color.matrix}")
+    stdout.append(f"{'primary':<{ROW_HEADER_WIDTH}} | {vstream.color.primaries:<{COLUMN_WIDTH}}  |  {file_vstream.color.primaries}")
+    stdout.append(f"{'transfer':<{ROW_HEADER_WIDTH}} | {vstream.color.transfer:<{COLUMN_WIDTH}}  |  {file_vstream.color.transfer}")
+
+
+    in_range = vstream.color.range
+    stdout.append(f"{'range':<{ROW_HEADER_WIDTH}} | {in_range if in_range else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.range}")
+
+    in_sar_str = f"{vstream.sar.numerator}:{vstream.sar.denominator}"
+    file_sar_str = f"{file_vstream.sar.numerator}:{file_vstream.sar.denominator}"
+    stdout.append(f"{'sar':<{ROW_HEADER_WIDTH}} | {in_sar_str:<{COLUMN_WIDTH}}  |  {file_sar_str}")
+    in_dar_str = f"{vstream.dar.numerator}:{vstream.dar.denominator}"
+    file_dar_str = f"{file_vstream.dar.numerator}:{file_vstream.dar.denominator}"
+    stdout.append(f"{'dar':<{ROW_HEADER_WIDTH}} | {in_dar_str:<{COLUMN_WIDTH}}  |  {file_dar_str}")
+    stdout.append(f"{'interlaced':<{ROW_HEADER_WIDTH}} | {vstream.interlaced:<{COLUMN_WIDTH}}  |  {file_vstream.interlaced}")
+
+
+    passed = True
+    if file_vstream.codec != vstream.codec:
+        stdout.append(red(f"Erroneous codec"))
+        passed = False
+
+    if file_vstream.profile != vstream.profile:
+      stdout.append(red(f"Erroneous profile"))
+      passed = False
+
+    if file_vstream.pix_fmt != vstream.pix_fmt:
+      stdout.append(red(f"Erroneous pix_fmt"))
+      passed = False
+
+    if file_vstream.color.range != vstream.color.range:
+      stdout.append(red(f"Erroneous color range"))
+      passed = False
+
+    if file_vstream.color.matrix != vstream.color.matrix:
+      stdout.append(red(f"Erroneous matrix"))
+      passed = False
+
+    if file_vstream.color.primaries != vstream.color.primaries:
+      stdout.append(red(f"Erroneous primaries"))
+      passed = False
+
+    if file_vstream.color.transfer != vstream.color.transfer:
+      stdout.append(red(f"Erroneous transfer"))
+      passed = False
+
+    if file_vstream.shape != vstream.shape:
+      stdout.append(red(f"Erroneous shape"))
+      passed = False
+
+    if file_vstream.is_frame_rate_fixed != vstream.is_frame_rate_fixed:
+      stdout.append(red(f"Erroneous IS frame rate"))
+      passed = False
+
+    if file_vstream.frame_rate_avg != vstream.frame_rate_avg:
+      stdout.append(red(f"Erroneous frame rate avg"))
+      passed = False
+
+    if file_vstream.frame_rate_r != vstream.frame_rate_r:
+      stdout.append(red(f"Erroneous frame rate r"))
+      passed = False
+
+    if file_vstream.sar != vstream.sar:
+      stdout.append(red(f"Erroneous sar"))
+      passed = False
+
+    if file_vstream.dar != vstream.dar:
+      stdout.append(red(f"Erroneous dar"))
+      passed = False
+
+    if file_vstream.interlaced != vstream.interlaced:
+      stdout.append(red(f"Erroneous interlaced"))
+      passed = False
+
+    if file_vstream.duration != vstream.duration:
+      stdout.append(red(f"Erroneous duration"))
+      passed = False
+
+    if file_vstream.frame_count != vstream.frame_count:
+        stdout.append(red(f"Erroneous frame count"))
+        passed = False
+
+    # TODO verify color space
+
+    return passed, stdout

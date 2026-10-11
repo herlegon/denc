@@ -4,13 +4,13 @@ import os
 from argparse import ArgumentParser
 from decimal import Decimal
 from pathlib import Path
-from pprint import pprint
+from pprint import pformat, pprint
 import signal
 import sys
 import time
 from typing import Any
 import numpy as np
-from hytils import lightcyan, red
+from hytils import lightcyan, lightgreen, red
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import denc
@@ -35,6 +35,7 @@ from denc import (
     H265_PROFILE_PIXFMT,
     VP9_PROFILE_PIXFMT
 )
+from tests.utils import check_generated_file
 
 
 import torch
@@ -133,6 +134,7 @@ def main():
             codec_profile_list.append((vcodec, None))
 
     out_video_filenames = []
+    results: dict[str, tuple[bool, list[str]]] = {}
 
 
     # codec
@@ -147,7 +149,14 @@ def main():
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
             print(lightcyan(f"\n{vcodec.value}:"), out_media.filepath)
             denc.write(out_media, frames=out_frames)
-            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
+
+            # Check generated media file
+            out_fp: Path = out_media.filepath
+            assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+            result = check_generated_file(out_media)
+            results[out_fp.name] = result
+            break
+
         vstream.codec = default_settings['codec']
 
 
@@ -338,7 +347,14 @@ def main():
                 out_video_filenames.append(out_media.filepath.name)
 
     print("\nEnded.")
-    pprint(out_video_filenames)
+
+
+    for f_name, result_stdout in results.items():
+        passed, stdout = result_stdout
+        color = lightgreen if passed else red
+        dlogger.info(f"{f_name:<100} {color(passed)}")
+        if not passed:
+            dlogger.info('\n'.join(stdout))
 
 
 

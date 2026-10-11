@@ -28,6 +28,10 @@ H264_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "high":     (PixFmt.YUV420P,),
 }
 
+H264_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "Constrained Baseline": 'baseline',
+}
+
 
 H265_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "main":       (PixFmt.YUV420P,),
@@ -67,6 +71,11 @@ PRORES_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "hq":       (PixFmt.YUV422P10,),
     "4444":     (PixFmt.YUV444P10,),
     "4444xq":   (PixFmt.YUV444P10,),
+}
+
+
+PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    VideoCodec.H264: H264_PROBE_TO_PROFILE_MAP,
 }
 
 

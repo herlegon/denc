@@ -26,7 +26,7 @@ from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
 from .tools import ffprobe_exe
 from .time_conversions import FrameRate
 from .vcodec import VideoCodec, supported_video_exts
-from .profiles import VCODEC_PROFILES
+from .profiles import PROBE_TO_PROFILE_MAP, VCODEC_PROFILES
 from .vstream import FieldOrder, OutVideoStream
 from .dlogger import dlogger
 
@@ -149,7 +149,7 @@ def open(filepath: Path) -> MediaStream | None:
     )
 
     # Pixel format
-    pix_fmt_str = v_stream.get('pix_fmt', None)
+    pix_fmt_str: str = v_stream.get('pix_fmt', None)
     try:
         pixel_format = PIXEL_FORMATS[pix_fmt_str]
     except KeyError as e:
@@ -193,6 +193,13 @@ def open(filepath: Path) -> MediaStream | None:
         transfer=v_stream.get("color_transfer"),
         range=_parse_color_range(v_stream.get("color_range")),
     )
+
+    # Overwrite color range is not in stream info
+    if color_info.range is None:
+        if 'yuv' in pix_fmt_str:
+            color_info.range = ColorRange.LIMITED
+        elif 'rgb' in pix_fmt.value:
+            color_info.range = ColorRange.FULL
 
     # Duration
     format_info = media_info.get("format") or {}
@@ -280,6 +287,14 @@ def open(filepath: Path) -> MediaStream | None:
                     break
     else:
         v_codec = VideoCodec(vcodec_name)
+
+
+    # profile
+    try:
+        v_profile = PROBE_TO_PROFILE_MAP.get(v_codec).get(v_stream.get("profile"))
+    except:
+        pass
+
 
     # Video stream
     video_info = VideoStream(

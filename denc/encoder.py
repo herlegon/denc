@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from decimal import Decimal
 from pathlib import Path
 from hytils import lightgreen, purple, red, yellow
 import numpy as np
@@ -161,6 +162,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
             f"Color range `{requested_range.value}` ignored for pix_fmt "
             f"`{ffmpeg_pix_fmt}`: encoded as `{effective_range.value}`"
         ))
+    vstream.color.range = effective_range
 
     range_filters, color_range_args = ffmpeg_color_range(
         vcodec=vcodec, out_pix_fmt=ffmpeg_pix_fmt
@@ -408,6 +410,16 @@ def write(
     print(lightgreen(media.video.filepath))
     # Generate the FFmpeg command
     e_command = generate_encoder_command(vstream=media.video)
+
+    # frame count and duration
+    media.video.frame_count = len(frames)
+    if media.video.is_frame_rate_fixed:
+        media.video.duration = Decimal(
+            Decimal(str(media.video.frame_count)) / Decimal(str(media.video.frame_rate_avg))
+        )
+    else:
+        raise NotImplementedError(f"variable bit rate not supported yet")
+
     # And create the subprocess
     parent_dir: str = media.video.filepath.parent
     if parent_dir:

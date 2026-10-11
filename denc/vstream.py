@@ -241,6 +241,9 @@ class OutVideoStream(VideoStream):
     def frame_rate(self, value: FrameRate | int | float, variable: bool = False) -> None:
         if variable:
             raise NotImplementedError(f"Variable frame rate is not yet available")
+
+        self.is_frame_rate_fixed = True
+
         if isinstance(value, Fraction):
             self.frame_rate_avg = value
 
