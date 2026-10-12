@@ -39,7 +39,7 @@ from .color_space import (
     ColorSpace,
     effective_color_range,
     ffmpeg_color_range,
-    ffmpeg_colorspace_args,
+    ffmpeg_colorspace_args_,
 )
 from .crf import effective_crf
 from .presets import effective_preset
@@ -111,7 +111,7 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     requested_pix_fmt = vstream.pix_fmt
     ffmpeg_pix_fmt: str = to_ffmpeg_pixfmt(vcodec=vcodec, pixfmt=requested_pix_fmt)
     pix_fmt_args: list[str] = ["-pix_fmt", ffmpeg_pix_fmt]
-    # print(red(f"requested: {requested_pix_fmt} -> {pix_fmt_args}"))
+    # dlogger.debug(purple(f"requested: {requested_pix_fmt} -> {pix_fmt_args}"))
 
     # Profiles
     profile = effective_profile(vcodec, vstream.profile, pixfmt=requested_pix_fmt)
@@ -151,7 +151,9 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     color_space: ColorSpace | None = (
         vstream.color.matrix if isinstance(vstream.color.matrix, ColorSpace) else None
     )
-    colorspace_args: list[str] = ffmpeg_colorspace_args(color_space, vcodec)
+    colorspace_args: list[str] = ffmpeg_colorspace_args_(vstream)
+    vstream.color.primaries = vstream.color.matrix
+
 
     # Color range: conversion filters + tag
     # Color range: the requested value is only honored when it matches what is encoded
@@ -183,7 +185,6 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
                 x265_values.append(tag_args[1])
         colorspace_args, color_range_args = [], []
         codec_params = ["-x265-params", ":".join(x265_values)] + codec_params
-
 
     # AUDIO
     #     # Copy audio stream if no video clipping

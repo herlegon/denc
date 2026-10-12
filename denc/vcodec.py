@@ -100,7 +100,7 @@ vcodec_to_extension: dict[VideoCodec, str] = {
 
 
 VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
-    VideoCodec.H264: (PixFmt.YUV420P,),
+    VideoCodec.H264: (PixFmt.YUV420P, PixFmt.YUV444P),
     VideoCodec.H265: (
         PixFmt.YUV420P,
         PixFmt.YUV420P10,
@@ -124,7 +124,7 @@ VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
         PixFmt.YUV422P10,
         PixFmt.YUV444P10,
     ),
-    VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUV444P10),
+    VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUV444P10, PixFmt.YUVA444P12),
     VideoCodec.VP9: (
         PixFmt.YUV420P,
         PixFmt.YUV420P10,
@@ -153,6 +153,7 @@ PIXFMT_TO_FFMPEG: dict[PixFmt, str] = {
     PixFmt.YUV422P12:   "yuv422p12le",
     PixFmt.YUV444P:     "yuv444p",
     PixFmt.YUV444P10:   "yuv444p10le",
+    PixFmt.YUVA444P12:   "yuva444p12le",
     PixFmt.RGB24:       "bgr0",       # FFV1
     PixFmt.RGB48:       "gbrp16le",   # FFV1
     PixFmt.RGBA24:      "rgba24",

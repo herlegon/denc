@@ -1,22 +1,31 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from .pxl_fmt import RGB_PREFIXES, PixFmt
-
+from .pxl_fmt import RGB_PREFIXES
 from .vcodec import (
     VideoCodec
 )
 
+if TYPE_CHECKING:
+    from .vstream import VideoStream
+
+
 
 class ColorSpace(Enum):
-    UNKNOWN = "unknown"
+    UNKNOWN = ""
     REC601_PAL = "rec601_pal"
     REC601_NTSC = "rec601_ntsc"
     REC709 = "bt709"
     BT709 = "bt709"
     BT2020NC = "bt2020nc"
     BT2020C = "bt2020c"
+
+    BT470G = "bt470bg"
+    SMPTE170M = "smpte170m"
+    GAMMA28 = "gamma28"
+    BT2020_10 = "bt2020-10"
 
 
 class ColorRange(str, Enum):
@@ -41,6 +50,16 @@ class ColorInfo:
             and self.transfer is not None
             and self.range is not None
         )
+
+
+def parse_color_range(value: str | None) -> ColorRange | None:
+    if value in ("pc", "full"):
+        return ColorRange.FULL
+
+    if value in ("tv", "limited"):
+        return ColorRange.LIMITED
+
+    return None
 
 
 def effective_color_range(out_pix_fmt: str) -> ColorRange:
@@ -101,15 +120,21 @@ X26X_TRANSFER: dict[str, str] = {"gamma28": "bt470bg"}
 # setparams, x264 and x265 call the same transfer bt470bg.
 ALT_TRC_NAME: dict[str, str] = {"gamma28": "bt470bg"}
 
-def ffmpeg_colorspace_args(
-    colorspace: ColorSpace | None,
-    vcodec: VideoCodec,
-) -> list[str]:
+
+def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
+    # Modify the video stream color info
+    colorspace: ColorSpace | None = vstream.color.matrix
     if colorspace is None or colorspace == ColorSpace.UNKNOWN:
         return []
 
+    vcodec: VideoCodec = vstream.codec
     space, prim, trc = colorspace_to_params[colorspace]
     alt_trc: str = ALT_TRC_NAME.get(trc, trc)
+
+    # Modify the video stream with the params that will be used
+    vstream.color.matrix = ColorSpace(space)
+    vstream.color.primaries = ColorSpace(prim)
+    vstream.color.transfer = ColorSpace(trc)
 
     args: list[str] = []
     if vcodec == VideoCodec.H264:

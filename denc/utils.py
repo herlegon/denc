@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import numpy as np
 import torch
 
@@ -21,5 +23,17 @@ def clean_str(line: str):
     for c in ('\\', '\"', ' ', '\r', '\n'):
         cleaned = cleaned.replace(c, '')
     return cleaned.strip()
+
+
+
+def parse_fraction(value: str | None, default: str) -> Fraction:
+    # ffprobe can return "N/A", "0/0" or "0:0" when the value is unknown
+    if not value or value in ("0/0", "0:0", "N/A"):
+        value = default
+
+    try:
+        return Fraction(value.replace(":", "/"))
+    except (ValueError, ZeroDivisionError):
+        return Fraction(default.replace(":", "/"))
 
 

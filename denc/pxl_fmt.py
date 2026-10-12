@@ -18,6 +18,7 @@ class PixFmt(Enum):
     YUV444P = "yuv444p"
     YUV444P10 = "yuv444p10le"
     YUV444P12 = "yuv444p12le"
+    YUVA444P12 = "yuva444p12le"
     RGB24 = "rgb24"
     RGB48 = "rgb48le"
     RGBA24 = "rgba24"

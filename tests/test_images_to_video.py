@@ -10,7 +10,7 @@ import sys
 import time
 from typing import Any
 import numpy as np
-from hytils import lightcyan, lightgreen, red
+from hytils import lightcyan, lightgreen, red, yellow
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import denc
@@ -127,6 +127,20 @@ def main():
             print(lightcyan(f"\n{vcodec.value} :"), f"not supported")
             continue
 
+        # if vcodec in (
+        #     VideoCodec.H264,
+        #     VideoCodec.H265,
+        #     VideoCodec.FFV1,
+        #     VideoCodec.DNXHR,
+        #     VideoCodec.AV1,
+        #     VideoCodec.VP9,
+        #     VideoCodec.PRORES,
+        #     VideoCodec.H264_NVENC,
+        #     VideoCodec.HEVC_NVENC,
+        # ):
+        #     print(yellow(f"Ignore: {vcodec.value}"))
+        #     continue
+
         if VCODEC_PROFILES.get(vcodec):
             for p in VCODEC_PROFILES[vcodec]:
                 codec_profile_list.append((vcodec, p))
@@ -144,6 +158,7 @@ def main():
             vstream.codec = vcodec
             vstream.profile = profile
             vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
+            vstream.shape = in_images[0].shape
 
             out_media.add_prop_suffix = True
             out_media.filepath = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
@@ -153,9 +168,11 @@ def main():
             # Check generated media file
             out_fp: Path = out_media.filepath
             assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
-            result = check_generated_file(out_media)
-            results[out_fp.name] = result
-            break
+            result_stdout = check_generated_file(out_media)
+            results[out_fp.name] = result_stdout
+            passed, stdout = result_stdout
+            if not passed:
+                break
 
         vstream.codec = default_settings['codec']
 
@@ -165,6 +182,7 @@ def main():
         print(lightcyan(f"PIX_FMTS\n{'-'*60}"))
         for vcodec, profile in codec_profile_list:
             vstream.codec = vcodec
+            vstream.shape = in_images[0].shape
             vstream.pix_fmt = default_settings['pix_fmt']
             out_media.add_prop_suffix = True
             filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"

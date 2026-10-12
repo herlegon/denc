@@ -5,8 +5,8 @@ from .vcodec import VideoCodec
 
 
 VCODEC_PROFILES: dict[VideoCodec, tuple[str, ...]] = {
-    VideoCodec.H264: ("baseline", "main", "high", "high10", "high422", "high444"),
-    VideoCodec.H265: ("main", "main10", "main422-10", "main444-8", "main444-10"),
+    VideoCodec.H264: ("baseline", "main", "high", "high444"),
+    VideoCodec.H265: ("main", "main10", "main444-8", "main422-10", "main444-10"),
     # VideoCodec.FFV1: (),   # no profile (only -level 0/1/3)
     VideoCodec.DNXHR: ("dnxhr_lb", "dnxhr_sq", "dnxhr_hq", "dnxhr_hqx", "dnxhr_444"),
     VideoCodec.AV1: ("main", ),
@@ -14,7 +14,7 @@ VCODEC_PROFILES: dict[VideoCodec, tuple[str, ...]] = {
     VideoCodec.PRORES: ("proxy", "lt", "standard", "hq", "4444", "4444xq"),
 
     VideoCodec.H264_NVENC: ("baseline", "main", "high", "high444p"),
-    VideoCodec.HEVC_NVENC: ("main", "main10", "rext"),
+    VideoCodec.HEVC_NVENC: ("main", "main10"),
     VideoCodec.AV1_NVENC: ("main",),    # ffmpeg -h encoder=av1_nvenc
 
     VideoCodec.H264_AMF: ("constrained_baseline", "main", "high", "constrained_high"),
@@ -26,19 +26,32 @@ H264_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "baseline": (PixFmt.YUV420P,),
     "main":     (PixFmt.YUV420P,),
     "high":     (PixFmt.YUV420P,),
+    "high444":  (PixFmt.YUV444P,),
 }
+
 
 H264_PROBE_TO_PROFILE_MAP: dict[str, str] = {
     "Constrained Baseline": 'baseline',
+    "Main": 'main',
+    "High": 'high',
+    "High 4:4:4 Predictive": "high444",
+    # "High 4:4:4 Predictive": "high444p",
 }
 
 
 H265_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "main":       (PixFmt.YUV420P,),
     "main10":     (PixFmt.YUV420P10,),
-    "main422-10": (PixFmt.YUV422P10, PixFmt.YUV422P),
+    "main422-10": (PixFmt.YUV422P10,),
     "main444-8":  (PixFmt.YUV444P,),
     "main444-10": (PixFmt.YUV444P10,),
+}
+
+H265_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "Constrained Baseline": 'baseline',
+    "Main": 'main',
+    "Main 10": 'main10',
+    "Rext": 'Rext',
 }
 
 
@@ -51,8 +64,21 @@ DNXHR_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
 }
 
 
+DNXHR_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "DNXHR LB": 'dnxhr_lb',
+    "DNXHR SQ": 'dnxhr_sq',
+    "DNXHR HQ": 'dnxhr_hq',
+    "DNXHR HQX": 'dnxhr_hqx',
+    "DNXHR 444": 'dnxhr_444',
+}
+
+
 AV1_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "main": (PixFmt.YUV420P, PixFmt.YUV420P10),
+}
+
+AV1_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "Main": 'main',
 }
 
 
@@ -63,19 +89,51 @@ VP9_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "3": (PixFmt.YUV422P10, PixFmt.YUV422P12),
 }
 
+VP9_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    'Profile 0': "0",
+    'Profile 1': "1",
+    'Profile 2': "2",
+    'Profile 3': "3",
+}
+
 
 PRORES_PROFILE_PIXFMT: dict[str, tuple[PixFmt, ...]] = {
     "proxy":    (PixFmt.YUV422P10,),
     "lt":       (PixFmt.YUV422P10,),
     "standard": (PixFmt.YUV422P10,),
     "hq":       (PixFmt.YUV422P10,),
-    "4444":     (PixFmt.YUV444P10,),
-    "4444xq":   (PixFmt.YUV444P10,),
+    "4444":     (PixFmt.YUVA444P12,),
+    "4444xq":   (PixFmt.YUVA444P12,),
 }
+
+
+PRORES_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "Proxy": "proxy",
+    "LT": "lt",
+    "Standard": "standard",
+    "HQ": "hq",
+    "4444": "4444",
+    "XQ": "4444xq",
+}
+
+
+H264_NVENC_PROBE_TO_PROFILE_MAP: dict[str, str] = {
+    "Constrained Baseline": 'baseline',
+    "Main": 'main',
+    "High": 'high',
+    "High 4:4:4 Predictive": "high444p",
+}
+
 
 
 PROBE_TO_PROFILE_MAP: dict[str, str] = {
     VideoCodec.H264: H264_PROBE_TO_PROFILE_MAP,
+    VideoCodec.H265: H265_PROBE_TO_PROFILE_MAP,
+    VideoCodec.DNXHR: DNXHR_PROBE_TO_PROFILE_MAP,
+    VideoCodec.AV1: AV1_PROBE_TO_PROFILE_MAP,
+    VideoCodec.VP9: VP9_PROBE_TO_PROFILE_MAP,
+    VideoCodec.PRORES: PRORES_PROBE_TO_PROFILE_MAP,
+    VideoCodec.H264_NVENC: H264_NVENC_PROBE_TO_PROFILE_MAP,
 }
 
 
@@ -87,6 +145,8 @@ VCODEC_PROFILE_PIXFMT: dict[VideoCodec, dict[str, tuple[PixFmt, ...]]] = {
     VideoCodec.AV1_NVENC: (),
     VideoCodec.VP9: VP9_PROFILE_PIXFMT,
     VideoCodec.PRORES: PRORES_PROFILE_PIXFMT,
+    VideoCodec.H264_NVENC: H264_PROFILE_PIXFMT,
+    VideoCodec.HEVC_NVENC: H265_PROFILE_PIXFMT,
 }
 
 
@@ -96,6 +156,10 @@ def check_profile_pixfmt(vcodec: VideoCodec, profile: str, pixfmt: PixFmt):
         expected = DNXHR_PROFILE_PIXFMT[profile][0]
         if pixfmt != expected:
             raise ValueError(f"H264 {profile} needs {expected.name}, got {pixfmt.name}")
+
+    elif vcodec == VideoCodec.H264 and profile is not None:
+        if profile is not None and pixfmt not in H264_PROFILE_PIXFMT[profile]:
+            raise ValueError(f"H264 profile {profile} does not support {pixfmt.name}")
 
     elif vcodec == VideoCodec.H265 and profile is not None:
         if profile is not None and pixfmt not in H265_PROFILE_PIXFMT[profile]:
@@ -125,13 +189,13 @@ def dnxhr_profiles_for(pixfmt: PixFmt) -> list[str]:
 
 # default profile
 vcodec_default_pixfmt: dict[VideoCodec, str] = {
-    VideoCodec.H264: PixFmt.YUV420P,
+    VideoCodec.H264: H264_PROFILE_PIXFMT,
     VideoCodec.H265: H265_PROFILE_PIXFMT,
     VideoCodec.AV1: AV1_PROFILE_PIXFMT,
     VideoCodec.VP9: VP9_PROFILE_PIXFMT,
     VideoCodec.FFV1: PixFmt.RGB24,
     VideoCodec.DNXHR: DNXHR_PROFILE_PIXFMT,
-    VideoCodec.PRORES: PixFmt.YUV422P10,
+    VideoCodec.PRORES: PRORES_PROFILE_PIXFMT,
 }
 
 

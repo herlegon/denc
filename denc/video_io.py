@@ -14,7 +14,7 @@ from pprint import pformat, pprint
 import subprocess
 from warnings import warn
 
-from .color_space import ColorInfo, ColorRange, ColorSpace
+from .color_space import ColorInfo, ColorRange, ColorSpace, parse_color_range
 
 from .media_stream import (
     AudioInfo,
@@ -26,32 +26,12 @@ from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
 from .tools import ffprobe_exe
 from .time_conversions import FrameRate
 from .vcodec import VideoCodec, supported_video_exts
-from .profiles import PROBE_TO_PROFILE_MAP, VCODEC_PROFILES
+from .profiles import H265_PROFILE_PIXFMT, PROBE_TO_PROFILE_MAP, VCODEC_PROFILES
 from .vstream import FieldOrder, OutVideoStream
+from .utils import parse_fraction
 from .dlogger import dlogger
 
 
-
-def _parse_fraction(value: str | None, default: str) -> Fraction:
-    # ffprobe can return "N/A", "0/0" or "0:0" when the value is unknown
-    if not value or value in ("0/0", "0:0", "N/A"):
-        value = default
-
-    try:
-        return Fraction(value.replace(":", "/"))
-    except (ValueError, ZeroDivisionError):
-        return Fraction(default.replace(":", "/"))
-
-
-
-def _parse_color_range(value: str | None) -> ColorRange | None:
-    if value in ("pc", "full"):
-        return ColorRange.FULL
-
-    if value in ("tv", "limited"):
-        return ColorRange.LIMITED
-
-    return None
 
 
 
@@ -187,11 +167,15 @@ def open(filepath: Path) -> MediaStream | None:
     #   color_space     -> YCbCr matrix coefficients
     #   color_primaries -> chromatic primaries
     #   color_transfer  -> transfer characteristic
+    space = v_stream.get("color_space", "")
+    prim = v_stream.get("color_primaries", "")
+    trans =v_stream.get("color_transfer", "")
+
     color_info = ColorInfo(
-        matrix=ColorSpace(v_stream.get("color_space", "unknown")),
-        primaries=ColorSpace(v_stream.get("color_primaries", "unknown")),
-        transfer=ColorSpace(v_stream.get("color_transfer", "unknown")),
-        range=_parse_color_range(v_stream.get("color_range")),
+        matrix=ColorSpace(space) if space else None,
+        primaries=ColorSpace(prim) if prim else None,
+        transfer=ColorSpace(trans) if trans else None,
+        range=parse_color_range(v_stream.get("color_range")),
     )
 
     # Overwrite color range is not in stream info
@@ -237,7 +221,6 @@ def open(filepath: Path) -> MediaStream | None:
     # Frame count
     frame_count = _frame_count_from_duration(duration, frame_rate_r)
 
-
     # Optional NUMBER_OF_FRAMES tag
     tags = v_stream.get("tags") or {}
     tag_frame_count_raw = tags.get("NUMBER_OF_FRAMES")
@@ -274,11 +257,27 @@ def open(filepath: Path) -> MediaStream | None:
     if not vcodec_name:
         raise NotImplementedError(f"Video Codec \'{vcodec_name}\' is not supported")
 
+    # Hardware encoders
+    if vcodec_name == 'h264':
+        tags = v_stream.get("tags", {})
+        if 'h264_nvenc' in tags.get('ENCODER', ""):
+            vcodec_name = 'h264_nvenc'
 
+    elif vcodec_name == 'hevc':
+        tags = v_stream.get("tags", {})
+        if 'hevc_nvenc' in tags.get('ENCODER', ""):
+            vcodec_name = 'hevc_nvenc'
+
+    elif vcodec_name == 'av1':
+        tags = v_stream.get("tags", {})
+        if 'av1_nvenc' in tags.get('ENCODER', ""):
+            vcodec_name = 'av1_nvenc'
+
+    # modify codec depending on found profile
     v_profile = ""
     if vcodec_name.lower() == "dnxhd":
         # if DNxHR, profile has to be used too
-        v_profile = v_stream.get("profile", "").lower()
+        v_profile = v_stream.get("profile").lower()
         if "dnxhr" in v_profile:
             v_codec = VideoCodec.DNXHR
             for p in VCODEC_PROFILES[VideoCodec.DNXHR]:
@@ -288,12 +287,17 @@ def open(filepath: Path) -> MediaStream | None:
     else:
         v_codec = VideoCodec(vcodec_name)
 
-
     # profile
     try:
         v_profile = PROBE_TO_PROFILE_MAP.get(v_codec).get(v_stream.get("profile"))
     except:
         pass
+
+    if v_codec in (VideoCodec.H265, VideoCodec.HEVC_NVENC) and v_stream.get("profile") == "Rext":
+        for k, v in H265_PROFILE_PIXFMT.items():
+            if pix_fmt == v[0]:
+                v_profile = k
+                break
 
 
     # Video stream
@@ -301,8 +305,8 @@ def open(filepath: Path) -> MediaStream | None:
         filepath=in_video_fp,
         shape=shape,
 
-        sar=_parse_fraction(v_stream.get("sample_aspect_ratio"), "1:1"),
-        dar=_parse_fraction(v_stream.get("display_aspect_ratio"), "1:1"),
+        sar=parse_fraction(v_stream.get("sample_aspect_ratio"), "1:1"),
+        dar=parse_fraction(v_stream.get("display_aspect_ratio"), "1:1"),
 
         field_order=field_order,
         interlaced=is_interlaced,

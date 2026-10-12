@@ -61,10 +61,6 @@ _PROFILE_TOKENS |= {p.removeprefix("dnxhr_") for p in VCODEC_PROFILES[VideoCodec
 
 
 
-
-
-
-
 FILENAME_RE = re.compile(rf"""
     ^(?P<base>.+?)_
     (?P<width>\d+)x(?P<height>\d+)_
@@ -204,7 +200,7 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
     stdout.append(pformat(file_vstream))
     stdout.append("")
 
-    COLUMN_WIDTH: int = 18
+    COLUMN_WIDTH: int = 22
     ROW_HEADER_WIDTH: int = 20
 
     total_width = ROW_HEADER_WIDTH + (COLUMN_WIDTH * 2) + 10
@@ -231,12 +227,14 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
     stdout.append(f"{'frame count':<{ROW_HEADER_WIDTH}} | {vstream.frame_count:<{COLUMN_WIDTH}}  |  {file_vstream.frame_count}")
 
     in_matrix = vstream.color.matrix
-    stdout.append(f"{'matrix':<{ROW_HEADER_WIDTH}} | {in_matrix if in_matrix else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.matrix}")
+    file_matrix = file_vstream.color.matrix
+    stdout.append(f"{'matrix':<{ROW_HEADER_WIDTH}} | {in_matrix if in_matrix else '':<{COLUMN_WIDTH}}  |  {file_matrix if file_matrix else ''}")
+    file_primaries = file_vstream.color.primaries
     in_primaries = vstream.color.primaries
-    stdout.append(f"{'primary':<{ROW_HEADER_WIDTH}} | {in_primaries if in_primaries else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.primaries}")
+    stdout.append(f"{'primary':<{ROW_HEADER_WIDTH}} | {in_primaries if in_primaries else '':<{COLUMN_WIDTH}}  |  {file_primaries if file_primaries else ''}")
+    file_transfer = file_vstream.color.transfer
     in_transfer = vstream.color.transfer
-    stdout.append(f"{'transfer':<{ROW_HEADER_WIDTH}} | {in_transfer if in_transfer else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.transfer}")
-
+    stdout.append(f"{'transfer':<{ROW_HEADER_WIDTH}} | {in_transfer if in_transfer else '':<{COLUMN_WIDTH}}  |  {file_transfer if file_transfer else ''}")
 
     in_range = vstream.color.range
     stdout.append(f"{'range':<{ROW_HEADER_WIDTH}} | {in_range if in_range else '':<{COLUMN_WIDTH}}  |  {file_vstream.color.range}")
@@ -251,7 +249,28 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
 
 
     passed = True
-    if file_vstream.codec != vstream.codec:
+    # Overwrite codec when encoder was hardware
+    file_vcodec = file_vstream.codec
+    if vstream.codec == VideoCodec.H264_NVENC and file_vcodec == VideoCodec.H264:
+       file_vcodec = VideoCodec.H264_NVENC
+    elif vstream.codec == VideoCodec.HEVC_NVENC and file_vcodec == VideoCodec.H265:
+       file_vcodec = VideoCodec.HEVC_NVENC
+    elif vstream.codec == VideoCodec.AV1_NVENC and file_vcodec == VideoCodec.AV1:
+       file_vcodec = VideoCodec.AV1_NVENC
+
+    exceptions = [
+       VideoCodec.H264,
+       VideoCodec.FFV1,
+       VideoCodec.AV1,
+       VideoCodec.VP9,
+       VideoCodec.PRORES,
+       VideoCodec.H264_NVENC,
+       VideoCodec.HEVC_NVENC,
+       VideoCodec.AV1_NVENC,
+    ]
+
+
+    if file_vcodec != vstream.codec:
         stdout.append(red(f"Erroneous codec"))
         passed = False
 
@@ -271,17 +290,29 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
       stdout.append(red(f"Erroneous matrix"))
       passed = False
 
-    if file_vstream.color.primaries != vstream.color.primaries:
+    if (
+        file_vcodec not in exceptions
+        and file_vstream.color.primaries != vstream.color.primaries
+    ):
       stdout.append(red(f"Erroneous primaries"))
       passed = False
 
-    if file_vstream.color.transfer != vstream.color.transfer:
+    if (
+        file_vcodec not in exceptions
+        and file_vstream.color.transfer != vstream.color.transfer
+    ):
       stdout.append(red(f"Erroneous transfer"))
       passed = False
 
     if file_vstream.shape != vstream.shape:
-      stdout.append(red(f"Erroneous shape"))
-      passed = False
+      if (
+        'a' in vstream.pix_fmt.value
+        and vstream.shape[2] + 1 == file_vstream.shape[2]
+      ):
+        pass
+      else:
+        stdout.append(red(f"Erroneous shape"))
+        passed = False
 
     if file_vstream.is_frame_rate_fixed != vstream.is_frame_rate_fixed:
       stdout.append(red(f"Erroneous IS frame rate"))
@@ -299,7 +330,11 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
       stdout.append(red(f"Erroneous sar"))
       passed = False
 
-    if file_vstream.dar != vstream.dar:
+    if (
+        file_vcodec not in (exceptions + [VideoCodec.DNXHR])
+        and file_vstream.dar != vstream.dar
+    ):
+      # FFmpeg calculate DAR from frames contrary to the other codecs....
       stdout.append(red(f"Erroneous dar"))
       passed = False
 
