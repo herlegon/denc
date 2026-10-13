@@ -124,7 +124,7 @@ VCODEC_PIXFMTS: dict[VideoCodec, tuple[PixFmt, ...]] = {
         PixFmt.YUV422P10,
         PixFmt.YUV444P10,
     ),
-    VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUV444P10, PixFmt.YUVA444P12),
+    VideoCodec.PRORES: (PixFmt.YUV422P10, PixFmt.YUVA444P12),
     VideoCodec.VP9: (
         PixFmt.YUV420P,
         PixFmt.YUV420P10,

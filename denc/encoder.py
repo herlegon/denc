@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from hytils import lightgreen, purple, red, yellow
 import numpy as np
@@ -102,6 +102,11 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     )
 
     vcodec: VideoCodec = vstream.codec
+
+    # Frame rate
+    vstream.frame_rate_avg = vstream.frame_rate
+    if vstream.is_frame_rate_fixed:
+        vstream.frame_rate_r = vstream.frame_rate
 
     # Validate codec support on current platform
     if not is_codec_supported(vcodec):
@@ -415,9 +420,13 @@ def write(
     # frame count and duration
     media.video.frame_count = len(frames)
     if media.video.is_frame_rate_fixed:
-        media.video.duration = Decimal(
-            Decimal(str(media.video.frame_count)) / Decimal(str(media.video.frame_rate_avg))
+        frame_rate_decimal = (
+            Decimal(media.video.frame_rate_avg.numerator)
+            / Decimal(media.video.frame_rate_avg.denominator)
         )
+        media.video.duration = Decimal(
+            Decimal(str(media.video.frame_count)) / frame_rate_decimal
+        ) # .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
     else:
         raise NotImplementedError(f"variable bit rate not supported yet")
 

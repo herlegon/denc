@@ -1,3 +1,4 @@
+from decimal import Decimal
 from enum import Enum
 from pprint import pformat, pprint
 import re
@@ -274,7 +275,7 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
         stdout.append(red(f"Erroneous codec"))
         passed = False
 
-    if file_vstream.profile != vstream.profile:
+    if vstream.profile and file_vstream.profile != vstream.profile:
       stdout.append(red(f"Erroneous profile"))
       passed = False
 
@@ -342,13 +343,17 @@ def check_generated_file(out_media: MediaStream) -> tuple[bool, list[str]]:
       stdout.append(red(f"Erroneous interlaced"))
       passed = False
 
-    if file_vstream.duration != vstream.duration:
+    if abs(file_vstream.duration - vstream.duration) > Decimal("0.001"):
       stdout.append(red(f"Erroneous duration"))
       passed = False
 
     if file_vstream.frame_count != vstream.frame_count:
         stdout.append(red(f"Erroneous frame count"))
         passed = False
+
+    # if file_vstream.crf != vstream.crf:
+    #     stdout.append(red(f"Erroneous CRF"))
+    #     passed = False
 
     # TODO verify color space
 

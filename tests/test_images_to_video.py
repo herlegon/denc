@@ -147,7 +147,6 @@ def main():
         else:
             codec_profile_list.append((vcodec, None))
 
-    out_video_filenames = []
     results: dict[str, tuple[bool, list[str]]] = {}
 
 
@@ -209,16 +208,32 @@ def main():
                         out_media.filepath = filepath_template
                         print(lightcyan(f"\n{vcodec.value}:"), pix_fmt)
                         denc.write(out_media, frames=out_frames)
-                        assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-                        out_video_filenames.append(out_media.filepath.name)
+
+                        # Check generated media file
+                        out_fp: Path = out_media.filepath
+                        assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+                        result_stdout = check_generated_file(out_media)
+                        results[out_fp.name] = result_stdout
+                        passed, stdout = result_stdout
+                        if not passed:
+                            break
+                    if not passed:
+                        break
+
                 else:
                     vstream.pix_fmt = pix_fmts
                     vstream.profile = profile
                     out_media.filepath = filepath_template
                     print(lightcyan(out_media.filepath))
                     denc.write(out_media, frames=out_frames)
-                    assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-                    out_video_filenames.append(out_media.filepath.name)
+                    # Check generated media file
+                    out_fp: Path = out_media.filepath
+                    assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+                    result_stdout = check_generated_file(out_media)
+                    results[out_fp.name] = result_stdout
+                    passed, stdout = result_stdout
+                    if not passed:
+                        break
 
 
     # frame rates
@@ -231,11 +246,19 @@ def main():
 
         for frame_rate in ("25", "50", "23.976", "29.97", "47.952", "59.94"):
             vstream.frame_rate = Fraction(frame_rate)
+            vstream.is_frame_rate_fixed = True
             out_media.filepath = filepath_template
             print(lightcyan(f"\nFramerate:"), frame_rate)
             denc.write(out_media, frames=out_frames)
-            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-            out_video_filenames.append(out_media.filepath.name)
+            # Check generated media file
+            out_fp: Path = out_media.filepath
+            assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+            result_stdout = check_generated_file(out_media)
+            results[out_fp.name] = result_stdout
+            passed, stdout = result_stdout
+            if not passed:
+                print(red("dfghjk"))
+                break
 
 
     # crf
@@ -254,9 +277,16 @@ def main():
             out_media.filepath = filepath_template
             print(lightcyan(out_media.filepath))
             denc.write(out_media, frames=out_frames)
-            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-            out_video_filenames.append(out_media.filepath.name)
+            # Check generated media file
+            out_fp: Path = out_media.filepath
+            assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+            result_stdout = check_generated_file(out_media)
+            results[out_fp.name] = result_stdout
+            passed, stdout = result_stdout
+            if not passed:
+                break
         vstream.crf = default_settings['crf']
+
 
     # presets
     if args.preset or all_tests:
@@ -271,8 +301,14 @@ def main():
             out_media.filepath = filepath_template
             print(lightcyan("Preset:"), vstream.preset.value)
             denc.write(out_media, frames=out_frames)
-            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-            out_video_filenames.append(out_media.filepath.name)
+            # Check generated media file
+            out_fp: Path = out_media.filepath
+            assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+            result_stdout = check_generated_file(out_media)
+            results[out_fp.name] = result_stdout
+            passed, stdout = result_stdout
+            if not passed:
+                break
 
         # Verify it's unused with other codecs
         # vstream.codec = VideoCodec.DNXHR
@@ -297,8 +333,14 @@ def main():
             out_media.filepath = filepath_template
             print(lightcyan(f"\nTune: {vstream.tune}"))
             denc.write(out_media, frames=out_frames)
-            assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-            out_video_filenames.append(out_media.filepath.name)
+            # Check generated media file
+            out_fp: Path = out_media.filepath
+            assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+            result_stdout = check_generated_file(out_media)
+            results[out_fp.name] = result_stdout
+            passed, stdout = result_stdout
+            if not passed:
+                break
 
 
         vstream.preset = default_settings['preset']
@@ -322,8 +364,14 @@ def main():
                 print(lightcyan(out_media.filepath))
                 print(lightcyan(f"\nColor range:"), color_range.value)
                 denc.write(out_media, frames=out_frames)
-                assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-                out_video_filenames.append(out_media.filepath.name)
+                # Check generated media file
+                out_fp: Path = out_media.filepath
+                assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+                result_stdout = check_generated_file(out_media)
+                results[out_fp.name] = result_stdout
+                passed, stdout = result_stdout
+                if not passed:
+                    break
 
 
     # Color space
@@ -361,8 +409,14 @@ def main():
                 print(lightcyan(out_media.filepath))
                 print(lightcyan(f"\nColor space:"), space)
                 denc.write(out_media, frames=out_frames)
-                assert file_exists_and_not_empty(out_media.filepath), f"Empty or missing: {out_media.filepath}"
-                out_video_filenames.append(out_media.filepath.name)
+                # Check generated media file
+                out_fp: Path = out_media.filepath
+                assert file_exists_and_not_empty(out_fp), f"Empty or missing: {out_fp}"
+                result_stdout = check_generated_file(out_media)
+                results[out_fp.name] = result_stdout
+                passed, stdout = result_stdout
+                if not passed:
+                    break
 
     print("\nEnded.")
 

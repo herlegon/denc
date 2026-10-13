@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 
 from .pxl_fmt import RGB_PREFIXES
 from .vcodec import (
-    VideoCodec
+    VideoCodec,
+    PixFmt,
 )
 
 if TYPE_CHECKING:
@@ -26,6 +27,7 @@ class ColorSpace(Enum):
     SMPTE170M = "smpte170m"
     GAMMA28 = "gamma28"
     BT2020_10 = "bt2020-10"
+    RGB = "gbr"
 
 
 class ColorRange(str, Enum):
@@ -128,6 +130,20 @@ def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
         return []
 
     vcodec: VideoCodec = vstream.codec
+    if (
+        vcodec == VideoCodec.FFV1
+        and vstream.pix_fmt in (
+            PixFmt.RGB24,
+            PixFmt.RGB48,
+            PixFmt.RGBA24,
+            PixFmt.RGBA48
+        )
+    ):
+        vstream.color.matrix = ColorSpace.RGB
+        vstream.color.primaries = None
+        vstream.color.transfer = None
+        return []
+
     space, prim, trc = colorspace_to_params[colorspace]
     alt_trc: str = ALT_TRC_NAME.get(trc, trc)
 
@@ -139,8 +155,10 @@ def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
     args: list[str] = []
     if vcodec == VideoCodec.H264:
         args = ["-x264-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
+
     elif vcodec == VideoCodec.H265:
         args = ["-x265-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
+
     elif vcodec == VideoCodec.DNXHR:
         args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
 
