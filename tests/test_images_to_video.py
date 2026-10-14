@@ -74,6 +74,8 @@ def main():
         args.tune,
     ]))
 
+    if args.pix_fmt:
+        raise DeprecationWarning("Not needed")
 
     # a list of images
     in_img_dir: Path = Path(__file__).resolve().parents[2] / "imgs" / "denc" / "in"
@@ -177,6 +179,7 @@ def main():
 
 
     # pixel Format
+    # Not needed because tested with profiles
     if args.pix_fmt or all_tests:
         print(lightcyan(f"PIX_FMTS\n{'-'*60}"))
         for vcodec, profile in codec_profile_list:
@@ -372,34 +375,36 @@ def main():
                 passed, stdout = result_stdout
                 if not passed:
                     break
-
+            if not passed:
+                break
 
     # Color space
     if args.color_space or all_tests:
         print(lightcyan(f"COLOR SPACES\n{'-'*60}"))
-        for vcodec in VideoCodec:
-            if not is_codec_supported(vcodec):
-                continue
+        passed = True
+        for vcodec, profile in codec_profile_list:
             vstream.codec = vcodec
-            profile = None
-            if vcodec == VideoCodec.DNXHR:
-                profile = "dnxhr_hq"
             vstream.profile = profile
-            vstream.color = None
             vstream.pix_fmt = default_pixfmt_for_profile(vcodec=vcodec, profile=profile)
+            vstream.shape = in_images[0].shape
 
             out_media.add_prop_suffix = True
             filepath_template = out_dir / f"img_to_video{vcodec_to_extension[vstream.codec]}"
 
             for space in (
                 # ColorSpace.UNKNOWN,
-                ColorSpace.REC601_PAL,
-                ColorSpace.REC601_NTSC,
+                # ColorSpace.REC601_PAL,
+                # ColorSpace.REC601_NTSC,
                 # ColorSpace.REC709,
                 ColorSpace.BT709,
                 # ColorSpace.BT2020NC,
                 # ColorSpace.BT2020C,
             ):
+                if (
+                    vcodec in (VideoCodec.H264, VideoCodec.H264_NVENC, VideoCodec.H264_AMF, VideoCodec.FFV1)
+                    and space in (ColorSpace.BT2020NC, ColorSpace.BT2020C)
+                ):
+                    break
                 vstream.color = ColorInfo(
                     matrix=space, primaries=space, transfer=space
                 )
@@ -417,6 +422,8 @@ def main():
                 passed, stdout = result_stdout
                 if not passed:
                     break
+            if not passed:
+                break
 
     print("\nEnded.")
 

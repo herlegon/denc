@@ -26,8 +26,10 @@ class ColorSpace(Enum):
     BT470G = "bt470bg"
     SMPTE170M = "smpte170m"
     GAMMA28 = "gamma28"
+    BT2020 = "bt2020"
     BT2020_10 = "bt2020-10"
     RGB = "gbr"
+    BT470M = "bt470m"
 
 
 class ColorRange(str, Enum):
@@ -150,7 +152,7 @@ def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
     # Modify the video stream with the params that will be used
     vstream.color.matrix = ColorSpace(space)
     vstream.color.primaries = ColorSpace(prim)
-    vstream.color.transfer = ColorSpace(trc)
+    vstream.color.transfer = ColorSpace(alt_trc)
 
     args: list[str] = []
     if vcodec == VideoCodec.H264:
@@ -159,7 +161,12 @@ def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
     elif vcodec == VideoCodec.H265:
         args = ["-x265-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
 
-    elif vcodec == VideoCodec.DNXHR:
+    # elif vcodec == VideoCodec.DNXHR:
+    #     args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
+
+    else:
+        # claude: setparams donne le même résultat pour x264, x265, SVT-AV1, VP9, ProRes, DNxHR et FFV1.
+        # C’est le seul mécanisme à la fois correct et complet.
         args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
 
     args += ["-colorspace", space, "-color_primaries", prim, "-color_trc", trc]

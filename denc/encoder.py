@@ -153,12 +153,12 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     codec_params: list[str] = vstream.extra_params.copy()
 
     # Colorspace tags (matrix, primaries, transfer)
-    color_space: ColorSpace | None = (
-        vstream.color.matrix if isinstance(vstream.color.matrix, ColorSpace) else None
-    )
     colorspace_args: list[str] = ffmpeg_colorspace_args_(vstream)
-    vstream.color.primaries = vstream.color.matrix
+    if vstream.color.primaries is None:
+        vstream.color.primaries = vstream.color.matrix
 
+    if vcodec == VideoCodec.H264 and vstream.color.matrix in (ColorSpace.BT2020NC, ColorSpace.BT2020C):
+        raise ValueError(f"Color space is not valid for {vcodec.value}")
 
     # Color range: conversion filters + tag
     # Color range: the requested value is only honored when it matches what is encoded
