@@ -169,7 +169,19 @@ def open(filepath: Path) -> MediaStream | None:
     #   color_transfer  -> transfer characteristic
     space = v_stream.get("color_space", "")
     prim = v_stream.get("color_primaries", "")
-    trans =v_stream.get("color_transfer", "")
+    trans = v_stream.get("color_transfer", "")
+
+    # If no colomatrix specified, let's guess
+    if not space:
+        h, w  = shape[:2]
+        if w >= 1280 or h > 576:
+            space = "bt709"
+        elif h == 576:
+            space = "bt470bg"
+        elif h == 480 or h == 488:
+            space = "smpte170m"
+        else:
+            space = "bt709"
 
     color_info = ColorInfo(
         matrix=ColorSpace(space) if space else None,

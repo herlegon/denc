@@ -1,5 +1,7 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from collections.abc import Set
+from copy import deepcopy
+from dataclasses import dataclass, field, fields
 from decimal import Decimal
 from enum import Enum
 from fractions import Fraction
@@ -117,7 +119,6 @@ class VideoStream:
 
 
     def __post_init__(self):
-        print(purple(self.pix_fmt))
         pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
         if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
             pipe_dtype: torch.dtype = torch.uint8
@@ -303,3 +304,33 @@ class OutVideoStream(VideoStream):
         if profile and profile not in VCODEC_PROFILES[self._codec]:
             raise ValueError(f"\'{profile}\' is not a valid profile for {self._codec}, available: {VCODEC_PROFILES[self._codec]}")
         self._profile = profile
+
+
+    @classmethod
+    def from_video_stream(cls, vs: VideoStream) -> "OutVideoStream":
+        skip: Set = {"filepath", "parent", "profile"}
+        kwargs = {
+            f.name: deepcopy(getattr(vs, f.name))
+            for f in fields(VideoStream)
+            if f.name not in skip
+        }
+
+        is_out = isinstance(vs, OutVideoStream)
+        if is_out:
+            kwargs.update(
+                _extra_params=list(vs._extra_params),
+                _crf=vs._crf,
+                _profile=vs._profile,
+                codec_options=deepcopy(vs.codec_options),
+                add_prop_suffix=vs.add_prop_suffix,
+                _preset=vs._preset,
+            )
+
+        new = cls(filepath=None, parent=None, **kwargs)
+
+        if is_out:
+            # Le filepath contient déjà l'extension : on contourne le setter.
+            new.filepath = vs.filepath
+            # Conserve un éventuel set_pipe_format() déjà appliqué.
+            new._pipe_format = deepcopy(vs._pipe_format)
+        return new

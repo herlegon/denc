@@ -1,11 +1,13 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from copy import copy, deepcopy
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
 
 from .encoder import write
 from .seek import Seek
 from .vstream import OutVideoStream, VideoStream
+
 
 
 @dataclass
@@ -62,3 +64,16 @@ class MediaStream:
 
     def write(self, frames):
         return write(self, frames)
+
+
+    def copy(self) -> "MediaStream":
+        new_video = (
+            None if self.video is None
+            else OutVideoStream.from_video_stream(self.video)
+        )
+        return replace(
+            self,
+            video=new_video,
+            audio=deepcopy(self.audio),
+            subtitles=deepcopy(self.subtitles),
+        )
