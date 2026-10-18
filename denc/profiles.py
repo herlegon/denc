@@ -1,5 +1,7 @@
 
 from enum import IntEnum
+
+from hytils import red
 from .pxl_fmt import PixFmt
 from .vcodec import VideoCodec
 
@@ -182,9 +184,14 @@ def vp9_profile_for(pixfmt: PixFmt) -> str:
     raise ValueError(f"No VP9 profile for {pixfmt.name}")
 
 
-# 2. pixfmt -> profiles ?
-def dnxhr_profiles_for(pixfmt: PixFmt) -> list[str]:
-    return [p for p, f in DNXHR_PROFILE_PIXFMT.items() if f == pixfmt]
+
+# DNxHR: pixfmt -> profiles ?
+def dnxhr_profiles_for(pixfmt: PixFmt) -> str:
+    profiles: list[str] = [p for p, pixfmts in DNXHR_PROFILE_PIXFMT.items() if pixfmt in pixfmts]
+    if not profiles:
+        raise ValueError(red(f"[DNxHR] Failed to find a valid profile for pixel formet {pixfmt.value}"))
+    return profiles[-1]
+
 
 
 # default profile

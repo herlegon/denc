@@ -2,11 +2,15 @@ from __future__ import annotations
 import math
 from pprint import pprint
 from queue import Queue
+import subprocess
 from threading import Event
+from typing import IO
 import numpy as np
 import torch
 from torch import Tensor
 from torch.cuda import StreamContext
+
+from hytils import lightcyan, purple, red
 
 from .base_thread import BaseThread, NnFrame
 from .encoder import generate_encoder_command
@@ -23,7 +27,6 @@ class EncoderThread(BaseThread):
         self,
         media_stream: MediaStream,
         name: str | None = None,
-        use_predefined_settings: bool = False,
         verbose: bool = False,
     ) -> None:
         super().__init__(name=name, verbose=verbose)
@@ -32,10 +35,7 @@ class EncoderThread(BaseThread):
         self.in_queue: Queue = Queue(1)
         self.media_stream = media_stream
         # Start the encoder by using settings defined in the media stream
-        if use_predefined_settings:
-            self.e_subprocess = generate_encoder_command(vstream=media_stream.video)
-        else:
-            self.e_subprocess = None
+        self.e_subprocess: subprocess = None
 
         self.progress_thread = None
 
@@ -58,43 +58,57 @@ class EncoderThread(BaseThread):
         remaining: int = self.media_stream.seek.count
 
         # Wait for first frame to start encoder
-        if self.e_subprocess is None:
-            input = in_queue.get(block=True)
-            if input is None or self._stop_event.is_set():
-                if verbose:
-                    print(purple("[V][E] Received Null tensor"))
-                self._processing = False
-                return
+        input = in_queue.get(block=True)
+        if input is None or self._stop_event.is_set():
+            if verbose:
+                print(purple("[V][E] Received Null tensor"))
+            self._processing = False
+            return
+        skip_first_frame = True
 
-            frame: NnFrame = input
-            d_tensor = frame.tensor
-            _, c, h, w = d_tensor.shape
-            pipe.shape = (h, w, c)
-            pipe.nbytes = (
-                math.prod(pipe.shape) * torch.tensor([], dtype=pipe.dtype).element_size()
+        frame: NnFrame = input
+        d_tensor = frame.tensor
+        _, c, h, w = d_tensor.shape
+        pipe.shape = (h, w, c)
+        pipe.nbytes = (
+            math.prod(pipe.shape) * torch.tensor([], dtype=pipe.dtype).element_size()
+        )
+        cuda = bool("cuda" in str(d_tensor.device))
+        encoder_command = generate_encoder_command(media=self.media_stream)
+        print(lightcyan("  encoder command:"), subprocess.list2cmdline(encoder_command))
+        self.media_stream.filepath.parent.mkdir(parents=True, exist_ok=True)
+
+        self.e_subprocess: subprocess.Popen = None
+        try:
+            self.e_subprocess = subprocess.Popen(
+                encoder_command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
             )
-            cuda = bool("cuda" in str(d_tensor.device))
-            self.e_subprocess = generate_encoder_command(vstream=vstream)
-            skip_first_frame = True
+        except Exception as e:
+            print(red(f"[E][W] Unexpected error: {type(e)}: {e}"))
+        if self.e_subprocess is None:
+            raise RuntimeError(red(f"[E][E] Error: encoder is None!"))
+        e_stdin: IO = self.e_subprocess.stdin
+        e_stdout: IO = self.e_subprocess.stdout
 
-        else:
-            cuda = bool("cuda" in vstream.device)
 
         # Output stream
         img_dtype: np.dtype = pipe.dtype
         img_shape: FShape = pipe.shape
 
         # Create a cuda stream and allocate Host memory
+        cuda = bool("cuda" in vstream.device.name)
         if cuda:
-            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(vstream.device)
+            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(vstream.device.name)
             stream_context: StreamContext = torch.cuda.stream(cuda_stream)
             host_mem: Tensor = torch.empty(
                 img_shape, dtype=pipe.dtype, pin_memory=True
             )
         else:
             from contextlib import nullcontext
-            cuda_stream = nullcontext()
-
+            stream_context = nullcontext()
 
         with stream_context:
             while (
@@ -145,10 +159,11 @@ class EncoderThread(BaseThread):
                     )
 
                 try:
-                    self.e_subprocess.stdin.write(out_img)
-                except:
-                    print(f"failed send {type(out_img)}")
-                    stdout: str = self.e_subprocess.stdout.read().decode("utf-8")
+                    e_stdin.write(out_img)
+
+                except Exception as e:
+                    print(f"failed send {type(out_img)}: {e}")
+                    stdout: str = e_stdout.read().decode("utf-8")
                     pprint(stdout.split('\n'))
                     break
 
@@ -177,7 +192,7 @@ class EncoderThread(BaseThread):
     def end_encoding(self) -> bool:
         # Close output video
         if self.e_subprocess is None:
-            return
+            return True
 
         stdout_bytes: bytes | None = None
         try:

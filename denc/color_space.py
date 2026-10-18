@@ -155,19 +155,16 @@ def ffmpeg_colorspace_args_(vstream: VideoStream) -> list[str]:
     vstream.color.transfer = ColorSpace(alt_trc)
 
     args: list[str] = []
-    if vcodec == VideoCodec.H264:
-        args = ["-x264-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
-
-    elif vcodec == VideoCodec.H265:
-        args = ["-x265-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
-
+    # if vcodec == VideoCodec.H264:
+    #     args = ["-x264-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
+    # elif vcodec == VideoCodec.H265:
+    #     args = ["-x265-params", f"colormatrix={space}:colorprim={prim}:transfer={alt_trc}"]
     # elif vcodec == VideoCodec.DNXHR:
     #     args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
 
-    else:
-        # claude: setparams donne le même résultat pour x264, x265, SVT-AV1, VP9, ProRes, DNxHR et FFV1.
-        # C’est le seul mécanisme à la fois correct et complet.
-        args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
+    # claude: setparams donne le même résultat pour x264, x265, SVT-AV1, VP9, ProRes, DNxHR et FFV1.
+    # C’est le seul mécanisme à la fois correct et complet.
+    args = ["-vf", f"setparams=colorspace={space}:color_primaries={prim}:color_trc={alt_trc}"]
 
     args += ["-colorspace", space, "-color_primaries", prim, "-color_trc", trc]
     return args

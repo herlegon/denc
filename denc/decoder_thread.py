@@ -5,6 +5,8 @@ import torch
 from torch import Tensor
 from torch.cuda import StreamContext
 
+from hytils import lightgreen, red, yellow
+
 from .base_thread import BaseThread, NnFrame
 from .decoder import decoder_subprocess
 from .dh_transfers import htod_transfer
@@ -38,18 +40,19 @@ class DecoderThread(BaseThread):
             media_stream=self.media_stream
         )
 
-
     @property
     def decoded(self) -> int:
         return self._decoded
 
 
-
     @torch.inference_mode()
     def run(self) -> None:
+        verbose = self.verbose
 
         if self.consumer is None:
             raise ValueError(red("[E] No consumer defined for the decoder."))
+
+        d_stdout = self.d_subprocess.stdout
 
         vstream: VideoStream = self.media_stream.video
         pipe: PipeFormat = vstream.pipe_format
@@ -79,15 +82,21 @@ class DecoderThread(BaseThread):
         f_no: int = max(0, self.media_stream.seek.start)
         f_index: int = 0
 
+        print(self.media_stream.seek)
+
+        if verbose:
+            print(lightgreen(f"[V][D] seek={self.media_stream.seek}"))
+            print(lightgreen(
+                f"[V][D] in_shape={in_shape}, in_dtype={in_dtype}, in_nbytes={in_nbytes}, remaining={remaining}"
+            ))
+
         with stream_context:
             while (
                 not self._stop_event.is_set()
                 and remaining > 0
             ):
-                img_buffer: Tensor = torch.frombuffer(
-                    self.d_subprocess.stdout.read(in_nbytes),
-                    dtype=torch.uint8,
-                )
+                # Decode a frame in CPU
+                img_buffer: Tensor = torch.frombuffer(d_stdout.read(in_nbytes), dtype=torch.uint8)
 
                 # Wait until resource (GPU) is available
                 self._lock.acquire(blocking=True)
@@ -122,7 +131,7 @@ class DecoderThread(BaseThread):
                     tensor=d_tensor.clone(),
                     last=bool(remaining == 1)
                 )
-                if self.verbose:
+                if verbose:
                     print(
                         f"[V][D] ({lightgreen(f_index)}) ({f_no}), {remaining}. Tensor:",
                         f"{d_tensor.shape}, {d_tensor.dtype}"

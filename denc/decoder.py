@@ -10,7 +10,7 @@ from torch.cuda import StreamContext
 from typing import TYPE_CHECKING
 import warnings
 
-from hytils import red
+from hytils import lightcyan, lightgreen, red
 
 from .media_stream import MediaStream
 from .np_dtypes import np_to_float32
@@ -22,7 +22,7 @@ from .torch_tensor import (
 from .vstream import (
     PipeFormat,
     VideoStream,
-    DecoderResize,
+    FFmpegResizer,
 )
 
 
@@ -60,81 +60,67 @@ if TYPE_CHECKING:
 from .dh_transfers import htod_transfer
 
 
-
-def _clean_vfilter(line: str) -> str:
-    cleaned: str = line
-    for c in ('\\', '\"', ' ', '\r', '\n'):
-        cleaned = cleaned.replace(c, '')
-    return cleaned.strip()
-
-
-
 def decoder_subprocess(media_stream: MediaStream) -> tuple[subprocess.Popen, int]:
     vstream: VideoStream = media_stream.video
     pipe: PipeFormat = vstream.pipe_format
+    seek = media_stream.seek
 
-    seek_start: list[str] = []
-    if media_stream.seek.start > 0:
-        seek_start = ["-ss", media_stream.seek.start_hms]
+    # Input option: placed before -i
+    seek_start: list[str] = ["-ss", seek.start_hms] if seek.start_hms else []
 
-    seek_duration: list[str] = []
-    frame_count = vstream.frame_count
-    if media_stream.seek.count > 0:
-        seek_duration = ["-t", media_stream.seek.duration]
-        frame_count = media_stream.seek.count
+    # Output option: frame-accurate. Only when the range is bounded.
+    seek_count: list[str] = ["-frames:v", str(seek.count)] if seek.duration else []
+    frame_count: int = seek.count
 
-    vfilter: list[str] = []
-    resize: DecoderResize = vstream.resize
-    resize_algo = 'lanczos'
+    # Resize
+    resize: FFmpegResizer = vstream.resize
     w, h = "in_w", "in_h"
-    if resize.use_sar:
-        resize_algo = vstream.resize.algorithm
-        h, w = vstream.shape[:2]
-        if resize.side == 'width':
-            w = int(vstream.sar.numerator * w / vstream.sar.denominator)
-        else:
-            h = int(vstream.sar.denominator * h / vstream.sar.numerator)
-
     if resize.enabled:
-        raise NotImplementedError(red("resize with FFmpeg"))
+        if resize.use_sar:
+            h, w = vstream.shape[:2]
+            if resize.side == "width":
+                w = int(vstream.sar.numerator * w / vstream.sar.denominator)
+            else:
+                h = int(vstream.sar.denominator * h / vstream.sar.numerator)
+        else:
+            w, h = resize.side
 
-    vfilter_str: str = f"""scale={w}:{h}:sws_flags={resize_algo}
-        + full_chroma_int
-        + full_chroma_inp
-        + accurate_rnd
-        + bitexact
-    """
-    vfilter = ["-vf", _clean_vfilter(vfilter_str)]
-
+    sws_flags = "+".join([
+        str(resize.algorithm),
+        "full_chroma_int",
+        "full_chroma_inp",
+        "accurate_rnd",
+        "bitexact",
+    ])
+    vfilter: list[str] = ["-vf", f"scale={w}:{h}:sws_flags={sws_flags}"]
 
     d_command: list[str] = [
-        ffmpeg_exe,
+        str(ffmpeg_exe),
         "-hide_banner",
         "-loglevel", "warning",
         "-nostats",
+        "-nostdin",
         *seek_start,
-        "-i", vstream.filepath,
-        *seek_duration,
-
+        "-i", str(vstream.filepath),
         *vfilter,
-
-        "-f", "image2pipe",
+        *seek_count,
+        "-f", "rawvideo",
         "-pix_fmt", pipe.pix_fmt,
         "-vcodec", "rawvideo",
-        "-"
+        "-",
     ]
-    print(lightcyan(f"  d_command:"), " ".join(d_command))
+    print(lightcyan("  d_command:"), subprocess.list2cmdline(d_command))
 
     d_subprocess: subprocess.Popen = None
     try:
         d_subprocess = subprocess.Popen(
             d_command,
-            stdin=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
     except Exception as e:
-        print(red(f"[E][W] Unexpected error: {type(e)}"))
+        print(red(f"[E][W] Unexpected error: {type(e)}: {e}"))
 
     return d_subprocess, frame_count
 

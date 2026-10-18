@@ -27,11 +27,10 @@ from .profiles import (
 )
 from .presets import X26xPreset
 from .pxl_fmt import PIXEL_FORMATS
-from .color_space import (
-    ColorInfo,
-    ColorRange,
-    ColorSpace,
-)
+from .color_space import ColorInfo
+from .crf import CRF_RANGES, effective_crf
+from .utils import pretty
+
 if TYPE_CHECKING:
     from .media_stream import MediaStream
 
@@ -65,11 +64,12 @@ class Device:
 
 
 @dataclass(slots=True)
-class DecoderResize:
+class FFmpegResizer:
     enabled: bool = False
     use_sar: bool = True
     algorithm: Literal['lanczos', 'bicubic'] = 'bicubic'
     side: Literal['width', 'height'] = 'width'
+    size: tuple[int, int] = ( 0, 0)
 
 
 
@@ -112,7 +112,7 @@ class VideoStream:
 
     metadata: Any = None
 
-    resize: DecoderResize = field(default_factory=DecoderResize)
+    resize: FFmpegResizer = field(default_factory=FFmpegResizer)
     device: Device = field(default_factory=Device)
 
     parent: Optional[MediaStream] = field(default=None, repr=False, compare=False)
@@ -136,6 +136,10 @@ class VideoStream:
             # device='cpu'
         )
         self._codec = self.codec
+
+
+    def __str__(self) -> str:
+        return pretty(self)
 
 
     def _calculate_pipe_shape(self) -> FShape:
@@ -185,13 +189,11 @@ class VideoStream:
 
 
 
-
-
 @dataclass
 class OutVideoStream(VideoStream):
     parent: Optional[MediaStream] = field(default=None, repr=False, compare=False)
     _extra_params: list[str] = field(default_factory=list)
-    _crf: int = -1
+    _crf: int | None  = None
     _profile: str = ""
     codec_options: Ffv1CodecOption | None = None
     add_prop_suffix: bool = False
@@ -275,18 +277,18 @@ class OutVideoStream(VideoStream):
 
 
     @property
-    def crf(self) -> int:
+    def crf(self) -> int | None:
         # libx264	    0–51	(23)
         # libx265	    0–51	(28)
         # libvpx-vp9	0–63	(31)
-        if self.codec == VideoCodec.VP9:
-            return max(-1, min(self._crf, 63))
-        return max(-1, min(self._crf, 51))
+        if self.codec not in CRF_RANGES:
+            return None
+        self._crf
 
 
     @crf.setter
     def crf(self, crf: int) -> None:
-        self._crf = max(0, min(crf, 63))
+        self._crf = effective_crf(crf=crf)
 
 
     @property
@@ -308,7 +310,7 @@ class OutVideoStream(VideoStream):
 
     @classmethod
     def from_video_stream(cls, vs: VideoStream) -> "OutVideoStream":
-        skip: Set = {"filepath", "parent", "profile"}
+        skip = {"filepath", "parent", "profile"}
         kwargs = {
             f.name: deepcopy(getattr(vs, f.name))
             for f in fields(VideoStream)
@@ -322,15 +324,16 @@ class OutVideoStream(VideoStream):
                 _crf=vs._crf,
                 _profile=vs._profile,
                 codec_options=deepcopy(vs.codec_options),
-                add_prop_suffix=vs.add_prop_suffix,
                 _preset=vs._preset,
+                resize=FFmpegResizer(enabled=False)
             )
+        else:
+            # Profil du fichier source : conservé s'il est valide pour le codec
+            # (le codec est repris tel quel de la source).
+            src = (vs.profile or "").strip().lower().replace(" ", "_")
+            kwargs["_profile"] = src if src in VCODEC_PROFILES.get(vs.codec, ()) else ""
 
         new = cls(filepath=None, parent=None, **kwargs)
-
         if is_out:
-            # Le filepath contient déjà l'extension : on contourne le setter.
-            new.filepath = vs.filepath
-            # Conserve un éventuel set_pipe_format() déjà appliqué.
             new._pipe_format = deepcopy(vs._pipe_format)
         return new

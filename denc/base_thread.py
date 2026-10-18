@@ -1,24 +1,14 @@
 from __future__ import annotations
 import abc
 from collections.abc import Callable
-from dataclasses import dataclass
 from threading import Thread
-from typing import Any, Iterable, Mapping, Optional, Type
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, Type
 import numpy as np
 import torch
-from torch import Tensor
 
-
-
-@dataclass(slots=True)
-class NnFrame:
-    f_no: int = 0
-    tensor: Tensor | np.ndarray = None
-    channel_last: bool = False
-
-    # last flag is used by temporal models
-    last: bool = False
-
+from .nnframe import NnFrame
+if TYPE_CHECKING:
+    from .progress_thread import ProgressThread
 
 
 class BaseThread(abc.ABC, Thread):
@@ -87,8 +77,8 @@ class BaseThread(abc.ABC, Thread):
         pass
 
 
-    # def set_progress_thread(self, progress_thread: ProgressThread) -> None:
-    #     self.progress_thread = progress_thread
+    def set_progress_thread(self, progress_thread: ProgressThread) -> None:
+        self.progress_thread = progress_thread
 
 
     def processing(self) -> bool:

@@ -4,20 +4,6 @@ from enum import Enum
 from .pxl_fmt import PixFmt
 
 
-supported_video_exts: tuple[str, ...] = (
-    '.mp4',     # H.264, H.265, MPEG-4
-    '.mkv',     # H.264, H.265, VP9, FFV1
-    '.mov',     # ProRes, H.264, H.265 (QuickTime)
-    '.avi',     # DivX, Xvid, MJPEG
-    '.mxf',     # DNxHR, AVC-Intra
-    '.webm',    # VP8, VP9 (WebM container)
-    '.flv',     # H.264, Sorenson Spark
-    '.ts',      # H.264/H.265 (MPEG-TS streaming)
-    '.ogg',     # Theora (less common)
-    '.wmv',     # WMV codecs (Windows Media)
-    '.3gp',     # H.263/H.264 (mobile devices)
-)
-
 
 class PatternName(Enum):
     SMPTEHDBARS = "smptehdbars"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
+from denc.audio import audio_subtitles_copy_args
 from hytils import lightgreen, purple, red, yellow
 import numpy as np
 import os
@@ -19,7 +20,6 @@ from typing import IO, TYPE_CHECKING
 from .capabilities import is_codec_supported
 from .tools import ffmpeg_exe
 
-from .dh_transfers import dtoh_transfer
 from .vstream import (
     OutVideoStream,
     PipeFormat,
@@ -31,6 +31,7 @@ from .vcodec import (
 )
 from .profiles import (
     check_profile_pixfmt,
+    dnxhr_profiles_for,
     effective_profile
 )
 from .tunes import effective_tune
@@ -43,14 +44,21 @@ from .color_space import (
 )
 from .crf import effective_crf
 from .presets import effective_preset
+
 from .np_dtypes import np_to_uint16, np_to_uint8
 from .dlogger import dlogger
 from .torch_tensor import (
     np_to_torch_dtype,
     tensor_to_img,
 )
+from .dh_transfers import dtoh_transfer
+
 if TYPE_CHECKING:
-    from .media_stream import MediaStream
+    from .media_stream import (
+        MediaStream,
+        AudioStreams,
+        SubtitleStreams,
+    )
 
 
 
@@ -81,7 +89,8 @@ def pretty_print_cmd(args: list[str]) -> str:
 
 
 
-def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
+def generate_encoder_command(media: MediaStream) -> list[str]:
+    vstream: OutVideoStream = media.video
 
     pipe: PipeFormat = vstream.pipe_format
     # pipe_pixel_format: dict = PIXEL_FORMATS[vstream.pix_fmt.value]['pipe_pxl_fmt']
@@ -121,7 +130,9 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     # Profiles
     profile = effective_profile(vcodec, vstream.profile, pixfmt=requested_pix_fmt)
     if vcodec == VideoCodec.DNXHR and not profile:
-        raise ValueError(red(f"missing profile for DNxHR"))
+        dlogger.warning(yellow(f"missing profile for DNxHR, guess from pixfmt"))
+        profile = dnxhr_profiles_for(requested_pix_fmt)
+
     profile_args: list[str] = ["-profile:v", profile] if profile else []
 
     # Verify that the pixfmt is supported for this profile
@@ -138,10 +149,12 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
     tune_args: list[str] = ["-tune", tune] if tune else []
 
     # crf range
-    crf = effective_crf(vcodec, vstream.crf)
-    crf_args: list[str] = ["-crf", str(crf)] if crf is not None else []
-    if vcodec == VideoCodec.VP9:
-        crf_args.extend(["-b:v", "0"])
+    crf_args: list[str] = []
+    if vstream.crf is not None:
+        crf = effective_crf(vcodec, vstream.crf)
+        crf_args: list[str] = ["-crf", str(crf)] if crf is not None else []
+        if vcodec == VideoCodec.VP9:
+            crf_args.extend(["-b:v", "0"])
 
     # params for codec:
     vcodec_options: list[str] = []
@@ -182,54 +195,19 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
         colorspace_args = []
     vf_args: list[str] = ["-vf", ",".join(vf_filters)] if vf_filters else []
 
-    # Single -x265-params: log-level + colorspace + range
+    # -x265-params
     if vcodec == VideoCodec.H265:
-        x265_values: list[str] = ["log-level=0"]
-        for tag_args in (colorspace_args, color_range_args):
-            if tag_args and tag_args[0] == "-x265-params":
-                x265_values.append(tag_args[1])
+        x265_params: list[str] = ["log-level=0"]
+        # for tag_args in (colorspace_args,): #  color_range_args):
+        #     if tag_args and tag_args[0] == "-x265-params":
+        #         x265_params.append(tag_args[1])
         colorspace_args, color_range_args = [], []
-        codec_params = ["-x265-params", ":".join(x265_values)] + codec_params
+        codec_params = ["-x265-params", ":".join(x265_params)] # + codec_params
 
-    # AUDIO
-    #     # Copy audio stream if no video clipping
-    #     if (
-    #         arguments.ss == ''
-    #         and arguments.to == ''
-    #         and arguments.t == ''
-    #     ):
-    #         params.copy_audio = True
-
-    #     return params
-
-    # if params.copy_audio and in_media_info['audio']['nstreams'] > 0:
-    #     ffmpeg_command.extend(['-i', video_info['filepath']])
-
-    # ffmpeg_command.extend([
-    #     "-map", "0:v"
-    # ])
-
-
-    # if params.benchmark:
-    #     ffmpeg_command.extend(["-benchmark", "-f", "null", "-"])
-    #     return ffmpeg_command
-
-
-    # # Audio/subtitles
-    # if params.copy_audio and True:
-    #     if in_media_info['audio']['nstreams'] > 0:
-    #         ffmpeg_command.extend([
-    #             "-map", "1:a", "-acodec", "copy"
-    #         ])
-    #     if in_media_info['subtitles']['nstreams'] > 0:
-    #         ffmpeg_command.extend([
-    #             "-map", "2:s", "-scodec", "copy"
-    #         ])
-
-    # # Custom params
-    # if params.ffmpeg_args:
-    #     ffmpeg_command.extend(params.ffmpeg_args.split(" "))
-
+    # Audio and subtitles
+    as_inputs: list[str]
+    as_args: list[str]
+    as_inputs, as_args = audio_subtitles_copy_args(media=media)
 
     # Add suffix (mainly used for unitary tests)
     filepath = vstream.parent.filepath
@@ -253,19 +231,22 @@ def generate_encoder_command(vstream: OutVideoStream) -> list[str]:
         "-r", str(vstream.frame_rate),
 
         "-i", "pipe:0",
+        *as_inputs,
+        "-map", "0:v:0",
 
         *vf_args,
         *pix_fmt_args,
         "-vcodec", vcodec_to_ffmpeg_vcodec[vstream.codec],
         *vcodec_options,
 
-        *profile_args,
+        # *profile_args,
         *tune_args,
         *crf_args,
         *preset_args,
         *codec_params,
         *colorspace_args,
         *color_range_args,
+        *as_args,
         # *metadata,
         str(filepath), "-y"
     ]
@@ -283,7 +264,7 @@ def _encode_cuda_tensors(
     frames: list[Tensor],
     device: str = "cuda:0",
 ) -> None:
-    e_command = generate_encoder_command(vstream=media.video)
+    e_command = generate_encoder_command(media=media)
     parent_dir: str = media.video.filepath.parent
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
@@ -415,7 +396,7 @@ def write(
         )
     print(lightgreen(media.video.filepath))
     # Generate the FFmpeg command
-    e_command = generate_encoder_command(vstream=media.video)
+    e_command = generate_encoder_command(media=media)
 
     # frame count and duration
     media.video.frame_count = len(frames)

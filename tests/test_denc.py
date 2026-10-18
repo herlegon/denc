@@ -39,11 +39,12 @@ def main():
 
     in_fp: Path = Path(args.input).resolve()
     file_media: MediaStream = denc.open(in_fp)
-    pprint(file_media.video)
+    print(file_media.video)
 
-
-    out_media = file_media.copy()
-    pprint(out_media.video)
+    out_dir: Path = Path(__file__).resolve().parents[1] / "out"
+    out_media = file_media.to_output(filepath=out_dir / "out.mxf")
+    print()
+    print(out_media.video)
 
 
 if __name__ == "__main__":

@@ -1,238 +1,153 @@
-
 from __future__ import annotations
-from dataclasses import dataclass
-from hytils import red
-import re
-from typing import TYPE_CHECKING, Optional
 
+import re
+from typing import TYPE_CHECKING
+
+from hytils import red
 from .time_conversions import (
-    FrameRate,
     frame_to_sexagesimal,
     sexagesimal_to_frame,
-    frame_to_s
+    frame_to_s,
 )
+
 if TYPE_CHECKING:
     from .vstream import VideoStream
 
+_FRAME_RE = re.compile(r"^(\d+)f$")
 
 
-@dataclass
+def _unset(value: int | str | None) -> bool:
+    """Return True for None, '' or a negative int (legacy -1 sentinel)."""
+    return value is None or value == "" or (isinstance(value, int) and value < 0)
+
+
 class Seek:
-    vstream: VideoStream
-    _start: Optional[int] = -1
-    _count: Optional[int] = -1
-    _to: Optional[int] = -1
+    """Frame range [start, to) of a video. `to` is exclusive.
 
+    Each value can be an int (frame number), a "123f" string, or a
+    sexagesimal time such as "00:01:30.5".
+    `count` takes priority over `to` when both are given.
+    With neither `count` nor `to`, the range extends to the end of the video.
+    """
+
+    def __init__(
+        self,
+        vstream: VideoStream,
+        start: int | str | None = 0,
+        count: int | str | None = None,
+        to: int | str | None = None,
+    ) -> None:
+        if not vstream.is_frame_rate_fixed:
+            raise NotImplementedError("[E] variable frame rate is not supported yet")
+        self.vstream = vstream
+        self._start: int = 0
+        self._count: int | None = None  # None = up to the end of the video
+
+        if not _unset(start):
+            self.start = start
+        # `count` has priority over `to`
+        if not _unset(count):
+            self.count = count
+        elif not _unset(to):
+            self.to = to
+
+    # ---- conversion ----
+    def _to_frames(self, value: int | str, name: str) -> int:
+        """Convert an int, "123f" or sexagesimal value to a frame number."""
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise ValueError(red(f"Invalid {name} value: {value!r}"))
+        if isinstance(value, int):
+            frames = value
+        else:
+            value = value.strip()
+            if not value:
+                raise ValueError(red(f"Invalid {name} value: {value!r}"))
+            if m := _FRAME_RE.match(value):
+                frames = int(m.group(1))
+            else:
+                frames = sexagesimal_to_frame(value, self.vstream.frame_rate_r)
+        if frames < 0:
+            raise ValueError(red(f"Negative {name} value: {frames}"))
+        return frames
+
+    # ---- start ----
     @property
     def start(self) -> int:
-        if self._start is None or self._start < 0:
-            if (
-                self._to is not None and self._to > 0
-                and self._count is not None and self._count > 0
-            ):
-                return self._to - self._count
-            return 0
+        """First frame of the range (0-based)."""
         return self._start
 
+    @start.setter
+    def start(self, value: int | str) -> None:
+        frames = self._to_frames(value, "start")
+        if frames >= self.vstream.frame_count:
+            raise ValueError(
+                red(f"Erroneous start value: {frames} >= {self.vstream.frame_count}")
+            )
+        self._start = frames
 
     @property
     def start_hms(self) -> str:
+        """Start as a sexagesimal time, or '' if start == 0 (no -ss needed)."""
         if self.start > 0:
             return frame_to_sexagesimal(self.start, self.vstream.frame_rate_r)
         return ""
 
-
-    @start.setter
-    def start(self, value: int | str) -> None:
-        _start: int = 0
-        if isinstance(value, int):
-            _start = value
-        elif isinstance(value, str) and value:
-            # Convert from str to frame no.
-            if result := re.search(re.compile(r"^(\d+)f$"), value):
-                _start = int(result.group(1))
-            else:
-                _start = sexagesimal_to_frame(value, self.vstream.frame_rate_r)
-        else:
-            raise ValueError(f"Invalid start value: {value!r}")
-
-        if _start >= self.vstream.frame_count:
-            raise ValueError(
-                red(f"Erroneous start value: {self.start} > {self.vstream.frame_count}")
-            )
-
-        self._start = _start
-
-
+    # ---- count ----
     @property
     def count(self) -> int:
-        _start: int = 0 if self._start is None or self._start < 0 else self._start
-        _count: int = 0 if self._count is None else self._count
-        return min(self.vstream.frame_count - _start, _count)
-
-
-    @property
-    def duration(self) -> int | str:
-        _start: int = 0 if self._start is None or self._start < 0 else self._start
-        _count: int = 0 if self._count is None or self._count < 0 else self._count
-        _to: int = 0 if self._to is None  or self._to < 0 else self._to
-
-        if _count <= 0:
-            if _start > 0 and _to > _start:
-                return min(_to - _start, self.vstream.frame_count - _start)
-            return ""
-        return f"{frame_to_s(self.count, self.vstream.frame_rate_r)}"
-
+        """Number of frames in the range, clamped to the end of the video."""
+        remaining = self.vstream.frame_count - self._start
+        return remaining if self._count is None else min(self._count, remaining)
 
     @count.setter
     def count(self, value: int | str) -> None:
-        _value: int = 0
-        if isinstance(value, int):
-            _value = value
-        elif isinstance(value, str) and value:
-            # Convert from str to frame no.
-            if result := re.search(re.compile(r"^(\d+)f$"), value):
-                _value = int(result.group(1))
-            else:
-                _value = sexagesimal_to_frame(value, self.vstream.frame_rate_r)
-        self._count = _value
-        self._to = -1
+        frames = self._to_frames(value, "count")
+        if frames == 0:
+            raise ValueError(red("Erroneous count value: 0"))
+        self._count = frames
 
+    @property
+    def duration(self) -> str:
+        """Duration in seconds (for -t), or '' if the range runs to the end."""
+        if self._count is None:
+            return ""
+        return f"{frame_to_s(self.count, self.vstream.frame_rate_r)}"
 
+    # ---- to (exclusive) ----
     @property
     def to(self) -> int:
-        _start: int = 0 if self._start is None or self._start < 0 else self._start
-        _count: int = 0 if self._count is None or self._count < 0 else self._count
-        _to: int = 0 if self._to is None  or self._to < 0 else self._to
-        if _to <= _start or _to > _start + _count:
-            raise ValueError(red(f"Erroneous end value: {_to} < {_start}"))
-        return _to
-
-
-    @property
-    def to_hms(self) -> str:
-        if self._to is None or self._to <= 0:
-            return "0.000"
-        return frame_to_sexagesimal(self._to, self.vstream.frame_rate_r)
-
+        """End frame (exclusive), derived from start and count."""
+        return self._start + self.count
 
     @to.setter
     def to(self, value: int | str) -> None:
-        _value: int = 0
-        if isinstance(value, int):
-            _value = value
-        elif isinstance(value, str) and value:
-            # Convert from str to frame no.
-            if result := re.search(re.compile(r"^(\d+)f$"), value):
-                _value = int(result.group(1))
-            else:
-                _value = sexagesimal_to_frame(value, self.vstream.frame_rate_r)
+        frames = self._to_frames(value, "to")
+        if frames <= self._start:
+            raise ValueError(red(f"Erroneous end value: {frames} <= {self._start}"))
+        # Clamped to frame_count in the `count` getter
+        self._count = frames - self._start
 
-        _start: int = 0 if self._start is None or self._start < 0 else self._start
-        if _value <= _start:
-            raise ValueError(red(f"Erroneous end value: {value} < {self._start}"))
-        self._to = _value
+    @property
+    def to_hms(self) -> str:
+        """End as a sexagesimal time, or '' if the range runs to the end."""
+        if self._count is None:
+            return ""
+        return frame_to_sexagesimal(self.to, self.vstream.frame_rate_r)
 
-        _to: int = 0 if self._to is None or self._to < 0 else self._to
-        if _start > 0:
-            self._count = _to - _start
-        else:
-            self._count = _to
+    # ---- FFmpeg ----
+    @property
+    def input_args(self) -> list[str]:
+        """Options to place BEFORE the relevant -i."""
+        args: list[str] = []
+        if self.start > 0:
+            args += ["-ss", self.start_hms]
+        if self._count is not None:
+            args += ["-t", self.duration]
+        return args
 
-
-    def __str__(self):
-        string: str = f"""Seek(
-    _start={self._start},
-    start_hms={self.start_hms},
-    _count={self._count},
-    _to={self._to},
-
-    duration={self.duration},
-    vstream.framecount={self.vstream.frame_count}
-
-    start={self.start},
-    count={self.count},
-)"""
-        return string
-
-
-
-
-    def _consolidate(
-        self,
-        vstream: VideoStream,
-        start: int | str = 0,
-        duration: int | str = -1,
-        end: int | str = -1,
-    ) -> Seek:
-        # vstream: VideoStream = stream.video
-
-        if not vstream.is_frame_rate_fixed:
-            raise NotImplementedError("[E] variable frame rate is not supported yet")
-
-        frame_rate: FrameRate = vstream.frame_rate_r
-
-
-        # Start
-        start_no: int = 0
-        if isinstance(start, int):
-            start_no = start
-        elif isinstance(start, str) and start:
-            # Convert from str to frame no.
-            if result := re.search(re.compile(r"^(\d+)f$"), start):
-                start_no = int(result.group(1))
-            else:
-                start_no = sexagesimal_to_frame(start, frame_rate)
-
-        if start_no >= vstream.frame_count:
-            raise ValueError(red(f"Erroneous seek start: {start} >= {vstream.frame_count}"))
-        print(yellow(f"start:"))
-        # Duration
-        count: int = -1
-        if isinstance(duration, int):
-            count = duration
-        elif isinstance(duration, str) and duration:
-            if result := re.search(re.compile(r"^(\d+)f$"), duration):
-                count = int(result.group(1))
-            else:
-                count = sexagesimal_to_frame(duration, frame_rate)
-        count = min(count, vstream.frame_count)
-
-        # End
-        end_no: int = -1
-        if isinstance(end, int):
-            end_no = end
-        elif isinstance(end, str) and end:
-            if result := re.search(re.compile(r"^(\d+)f$"), end):
-                end_no = int(result.group(1))
-            else:
-                end_no = sexagesimal_to_frame(end, frame_rate)
-        count = min(end_no, vstream.frame_count)
-
-        max_count = vstream.frame_count
-        if start_no > 0:
-            if end_no >= start_no:
-                raise ValueError(red(f"Erroneous seek end: {end} > {start}"))
-            max_count = end_no - start_no
-
-        # Only start is specified
-        if count <= 0 and end_no <= 0:
-            count = max_count - start_no
-        # count is specified and has the priority
-        elif count > 0:
-            end_no = start_no + count
-        # end is specified: low priority
-        elif end_no > 0:
-            if end_no < start_no:
-                raise ValueError(red(f"Erroneous seek end: {end} < {start}"))
-            count = end_no - start_no
-
-        return Seek(
-            vstream=vstream,
-            start=start_no,
-            start_hms=frame_to_sexagesimal(start_no, frame_rate),
-            count=count,
-            duration=frame_to_sexagesimal(count, frame_rate) if count else "",
-            to=end_no,
-            to_hms=frame_to_sexagesimal(end_no, frame_rate) if end_no else "",
+    def __str__(self) -> str:
+        return (
+            f"Seek(start={self.start} [{self.start_hms or '0'}], "
+            f"count={self.count}, to={self.to}, "
+            f"frame_count={self.vstream.frame_count})"
         )

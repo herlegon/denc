@@ -1,4 +1,7 @@
+from dataclasses import fields, is_dataclass
+from enum import Enum
 from fractions import Fraction
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -36,4 +39,55 @@ def parse_fraction(value: str | None, default: str) -> Fraction:
     except (ValueError, ZeroDivisionError):
         return Fraction(default.replace(":", "/"))
 
+
+
+def tags(raw: dict[str, str | dict[str, str]]) -> dict[str, str]:
+    """Tags ffprobe avec clés en minuscules (la casse varie selon le conteneur)."""
+    return {
+        k.lower(): v
+        for k, v in raw.get("tags", {}).items()
+    }
+
+
+
+def _fmt(value) -> str:
+    if isinstance(value, Enum):
+        return value.name
+    if isinstance(value, Fraction):
+        if value.denominator == 1:
+            return str(value.numerator)
+        return f"{value.numerator}/{value.denominator} ({float(value):.3f})"
+    if isinstance(value, torch.dtype):
+        return str(value).removeprefix("torch.")
+    if isinstance(value, Path):
+        return str(value)
+    return repr(value) if isinstance(value, str) else str(value)
+
+
+
+def pretty(obj, indent: int = 0) -> str:
+    """Multi-line, aligned representation of a (nested) dataclass.
+    Fields declared with repr=False (e.g. `parent`) are skipped.
+    Non-empty dicts are expanded, one item per line.
+    Fields starting with '_' are listed last."""
+    pad = "  " * indent
+    sub = pad + "  "
+    flds = [f for f in fields(obj) if f.repr]
+    flds.sort(key=lambda f: f.name.startswith("_"))   # tri stable : False < True
+    width = max((len(f.name) for f in flds), default=0)
+
+    lines = [f"{pad}{type(obj).__name__}"] if indent == 0 else []
+    for f in flds:
+        value = getattr(obj, f.name)
+        if is_dataclass(value):
+            lines.append(f"{sub}{f.name}: {type(value).__name__}")
+            lines.append(pretty(value, indent + 1))
+        elif isinstance(value, dict) and value:
+            lines.append(f"{sub}{f.name}:")
+            kw = max(len(str(k)) for k in value)
+            for k, v in value.items():
+                lines.append(f"{sub}  {str(k):<{kw}} : {_fmt(v)}")
+        else:
+            lines.append(f"{sub}{f.name:<{width}} : {_fmt(value)}")
+    return "\n".join(lines)
 

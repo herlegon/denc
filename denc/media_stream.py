@@ -1,5 +1,5 @@
 from __future__ import annotations
-from copy import copy, deepcopy
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Optional
@@ -8,31 +8,27 @@ from .encoder import write
 from .seek import Seek
 from .vstream import OutVideoStream, VideoStream
 
-
-
-@dataclass
-class AudioInfo:
-    nstreams: int = 0
-
-
-
-@dataclass
-class SubtitleInfo:
-    nstreams: int = 0
-
+from .audio import AudioStreams
+from .subtitles import SubtitleStreams
+from .container import ContainerFormat
 
 
 @dataclass
 class MediaStream:
     video: VideoStream | OutVideoStream
-    audio: AudioInfo | None = None
-    subtitles: SubtitleInfo | None = None
+    audio: AudioStreams | None = None
+    subtitles: SubtitleStreams | None = None
     seek: Seek = field(default=None, init=False)
     filepath: Optional[Path] = None
+    container: Optional[ContainerFormat] = field(default=None, init=False)
     # Add the property to the basename
     add_prop_suffix: bool = False
 
+
     def __post_init__(self) -> None:
+        if self.filepath is not None:
+            self.container = self.filepath.suffix
+
         if self.video is not None:
             self.video.parent = self
 
@@ -40,6 +36,7 @@ class MediaStream:
             self.video.filepath = self.filepath
             self.video.add_prop_suffix = self.add_prop_suffix
 
+        # Seek is also copied if video is output: for statitiscs (progression)
         self.seek = Seek(vstream=self.video)
 
 
@@ -66,14 +63,29 @@ class MediaStream:
         return write(self, frames)
 
 
-    def copy(self) -> "MediaStream":
-        new_video = (
-            None if self.video is None
-            else OutVideoStream.from_video_stream(self.video)
-        )
+    def to_output(self, filepath: Path | None = None) -> "MediaStream":
+        """Génère le MediaStream de sortie, prêt à être configuré
+        (filepath, codec, crf, preset...) puis utilisé pour construire
+        la commande FFmpeg.
+
+        Reprend de la source : shape, frame rate, pix_fmt, sar/dar, color, etc.
+        Réinitialise : seek (nouveau Seek) et filepath.
+        """
+        if self.video is None:
+            raise ValueError("to_output() requires a video stream")
+
+        audio: AudioStreams = deepcopy(self.audio)
+        audio.filepath = self.filepath
+
+        subtitles: SubtitleStreams = deepcopy(self.subtitles)
+        subtitles.filepath = self.filepath
+
         return replace(
             self,
-            video=new_video,
-            audio=deepcopy(self.audio),
-            subtitles=deepcopy(self.subtitles),
+            video=OutVideoStream.from_video_stream(self.video),
+            audio=audio,
+            subtitles=subtitles,
+            filepath=filepath,
+            # seek est recréé par __post_init__
         )
+

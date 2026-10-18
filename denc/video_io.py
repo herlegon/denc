@@ -17,21 +17,24 @@ from warnings import warn
 from .color_space import ColorInfo, ColorRange, ColorSpace, parse_color_range
 
 from .media_stream import (
-    AudioInfo,
     MediaStream,
-    SubtitleInfo,
     VideoStream,
+    AudioStreams,
+    SubtitleStreams,
 )
-from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
+from .container import SUPPORTED_CONTAINER_FORMATS
+from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
 from .tools import ffprobe_exe
 from .time_conversions import FrameRate
-from .vcodec import VideoCodec, supported_video_exts
-from .profiles import H265_PROFILE_PIXFMT, PROBE_TO_PROFILE_MAP, VCODEC_PROFILES
+from .vcodec import VideoCodec
+from .profiles import H265_PROFILE_PIXFMT, PROBE_TO_PROFILE_MAP, VCODEC_PROFILES, dnxhr_profiles_for
 from .vstream import FieldOrder, OutVideoStream
 from .utils import parse_fraction
+
+from .audio import AudioStream
+from .subtitles import SubtitleStream
+
 from .dlogger import dlogger
-
-
 
 
 
@@ -98,7 +101,7 @@ def open(filepath: Path) -> MediaStream | None:
         raise ValueError(red(f"Error: missing input file {in_video_fp}"))
 
     extension = in_video_fp.suffix.lower()
-    if extension not in supported_video_exts:
+    if extension not in SUPPORTED_CONTAINER_FORMATS:
         raise NotImplementedError(f"Not a supported video file (extension={extension})")
 
     try:
@@ -117,15 +120,19 @@ def open(filepath: Path) -> MediaStream | None:
         raise ValueError(f"No video stream found in {in_video_fp}")
     v_stream: dict = v_streams[0]
 
-    audio_info: AudioInfo = AudioInfo(
-        nstreams=len([
-            stream for stream in media_info['streams'] if stream['codec_type'] == 'audio'
-        ])
+    audio_streams = AudioStreams(
+        streams=[
+            AudioStream.from_ffprobe(s)
+            for s in media_info["streams"]
+            if s["codec_type"] == "audio"
+        ]
     )
-    subs_info: SubtitleInfo = SubtitleInfo(
-        nstreams=len([
-            stream for stream in media_info['streams'] if stream['codec_type'] == 'subtitle'
-        ])
+    subtitle_streams = SubtitleStreams(
+        streams=[
+            SubtitleStream.from_ffprobe(s)
+            for s in media_info["streams"]
+            if s["codec_type"] == "subtitle"
+        ]
     )
 
     # Pixel format
@@ -311,6 +318,8 @@ def open(filepath: Path) -> MediaStream | None:
                 v_profile = k
                 break
 
+    elif v_codec == VideoCodec.DNXHR and not v_profile:
+        v_profile = dnxhr_profiles_for(pixfmt=pix_fmt)
 
     # Video stream
     video_info = VideoStream(
@@ -388,8 +397,8 @@ def open(filepath: Path) -> MediaStream | None:
     return MediaStream(
         filepath=filepath,
         video=video_info,
-        audio=audio_info,
-        subtitles=subs_info
+        audio=audio_streams,
+        subtitles=subtitle_streams
     )
 
 
@@ -409,8 +418,8 @@ def new(filepath: str = "", preset = None) -> MediaStream:
     mstream: MediaStream=MediaStream(
         filepath=filepath,
         video=vstream,
-        audio=AudioInfo(nstreams=0),
-        subtitles=SubtitleInfo(nstreams=0),
+        audio=AudioStreams(),
+        subtitles=SubtitleStreams(),
     )
     vstream.parent = mstream
 
