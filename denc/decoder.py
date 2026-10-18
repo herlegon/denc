@@ -12,6 +12,7 @@ import warnings
 
 from hytils import lightcyan, lightgreen, red
 
+from .encoder import pretty_print_cmd
 from .media_stream import MediaStream
 from .np_dtypes import np_to_float32
 from .tools import ffmpeg_exe
@@ -24,7 +25,7 @@ from .vstream import (
     VideoStream,
     FFmpegResizer,
 )
-
+from .dlogger import dlogger
 
 warnings.filterwarnings("ignore", category=UserWarning, message=".*non-writable tensors.*")
 
@@ -109,7 +110,9 @@ def decoder_subprocess(media_stream: MediaStream) -> tuple[subprocess.Popen, int
         "-vcodec", "rawvideo",
         "-",
     ]
-    print(lightcyan("  d_command:"), subprocess.list2cmdline(d_command))
+    dlogger.debug(f"{lightcyan("Decoder command:")}\n{subprocess.list2cmdline(d_command)}")
+    dlogger.debug(f"{lightcyan("Decoder command:")}")
+    dlogger.debug(pretty_print_cmd(d_command))
 
     d_subprocess: subprocess.Popen = None
     try:

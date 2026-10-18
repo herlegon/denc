@@ -19,7 +19,7 @@ from .vstream import FShape, PipeFormat, VideoStream
 
 from .dh_transfers import dtoh_transfer
 from .torch_tensor import tensor_to_img
-
+from .dlogger import dlogger
 
 
 class EncoderThread(BaseThread):
@@ -35,7 +35,7 @@ class EncoderThread(BaseThread):
         self.in_queue: Queue = Queue(1)
         self.media_stream = media_stream
         # Start the encoder by using settings defined in the media stream
-        self.e_subprocess: subprocess = None
+        self.e_subprocess: subprocess.Popen = None
 
         self.progress_thread = None
 
@@ -61,7 +61,7 @@ class EncoderThread(BaseThread):
         input = in_queue.get(block=True)
         if input is None or self._stop_event.is_set():
             if verbose:
-                print(purple("[V][E] Received Null tensor"))
+                dlogger.debug(purple("[V][E] Received Null tensor"))
             self._processing = False
             return
         skip_first_frame = True
@@ -75,7 +75,7 @@ class EncoderThread(BaseThread):
         )
         cuda = bool("cuda" in str(d_tensor.device))
         encoder_command = generate_encoder_command(media=self.media_stream)
-        print(lightcyan("  encoder command:"), subprocess.list2cmdline(encoder_command))
+        dlogger.debug(f"{lightcyan("  encoder command:")} {subprocess.list2cmdline(encoder_command)}")
         self.media_stream.filepath.parent.mkdir(parents=True, exist_ok=True)
 
         self.e_subprocess: subprocess.Popen = None
@@ -87,7 +87,7 @@ class EncoderThread(BaseThread):
                 stderr=subprocess.STDOUT,
             )
         except Exception as e:
-            print(red(f"[E][W] Unexpected error: {type(e)}: {e}"))
+            dlogger.error(red(f"[E][W] Unexpected error: {type(e)}: {e}"))
         if self.e_subprocess is None:
             raise RuntimeError(red(f"[E][E] Error: encoder is None!"))
         e_stdin: IO = self.e_subprocess.stdin
@@ -122,7 +122,7 @@ class EncoderThread(BaseThread):
                     input = in_queue.get(block=True)
                     if input is None or self._stop_event.is_set():
                         if verbose:
-                            print(purple("[V][E] Received Null tensor"))
+                            dlogger.debug(purple("[V][E] Received Null tensor"))
                         self.end_encoding()
                         break
 
@@ -131,9 +131,8 @@ class EncoderThread(BaseThread):
 
                 # Get tensor from frame
                 if verbose:
-                    print(
-                        purple(f"[V][E] Received no. {received}:"),
-                        f"{d_tensor.shape}, {d_tensor.dtype}, {d_tensor.data_ptr()}"
+                    dlogger.debug(
+                        f"{purple(f"[V][E] Received no. {received}:")} {d_tensor.shape}, {d_tensor.dtype}, {d_tensor.data_ptr()}"
                     )
                     received += 1
 
@@ -153,16 +152,15 @@ class EncoderThread(BaseThread):
                 frame.tensor = None
 
                 if verbose:
-                    print(
-                        purple(f"[V][E] send to pipe:"),
-                        f"{out_img.shape}, {out_img.dtype}"
+                    dlogger.debug(
+                        f"{purple(f"[V][E] send to FFmpeg pipe:")} {out_img.shape}, {out_img.dtype}"
                     )
 
                 try:
                     e_stdin.write(out_img)
 
                 except Exception as e:
-                    print(f"failed send {type(out_img)}: {e}")
+                    dlogger.error(f"failed send {type(out_img)}: {e}")
                     stdout: str = e_stdout.read().decode("utf-8")
                     pprint(stdout.split('\n'))
                     break
@@ -181,10 +179,8 @@ class EncoderThread(BaseThread):
         #     print(red(f"[V][E] Error while executing: "), " ".join(encoder_command))
         self._processing = False
         if verbose:
-            print(
-                purple(f"[V][E] All frames encoded or error"),
-                f"{self._encoded}",
-                flush=True
+            dlogger.debug(
+                f"{purple(f"[V][E] All frames encoded or error")} {self._encoded}"
             )
         self.end_encoding()
 

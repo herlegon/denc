@@ -83,7 +83,7 @@ def pretty_print_cmd(args: list[str]) -> str:
     if current_line:
         lines.append(" ".join(current_line))
 
-    return "\n".join(lines)
+    return "\n  ".join(lines)
 
 
 
@@ -251,7 +251,7 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
         str(filepath), "-y"
     ]
 
-    dlogger.debug(f"{purple("Encoder command:")} {' '.join(e_command)}")
+    dlogger.debug(f"{purple("Encoder command:")}\n{subprocess.list2cmdline(e_command)}")
     dlogger.debug(f"{purple("Encoder command:")}")
     dlogger.debug(pretty_print_cmd(e_command))
 

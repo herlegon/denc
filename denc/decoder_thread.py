@@ -5,7 +5,7 @@ import torch
 from torch import Tensor
 from torch.cuda import StreamContext
 
-from hytils import lightgreen, red, yellow
+from hytils import lightcyan, lightgreen, red, yellow
 
 from .base_thread import BaseThread, NnFrame
 from .decoder import decoder_subprocess
@@ -17,7 +17,7 @@ from .vstream import (
     PipeFormat,
     VideoStream,
 )
-
+from .dlogger import dlogger
 
 warnings.filterwarnings("ignore", category=UserWarning, message=".*non-writable tensors.*")
 
@@ -82,11 +82,11 @@ class DecoderThread(BaseThread):
         f_no: int = max(0, self.media_stream.seek.start)
         f_index: int = 0
 
-        print(self.media_stream.seek)
+        dlogger.debug(self.media_stream.seek)
 
         if verbose:
-            print(lightgreen(f"[V][D] seek={self.media_stream.seek}"))
-            print(lightgreen(
+            print(lightcyan(f"[V][D] seek={self.media_stream.seek}"))
+            print(lightcyan(
                 f"[V][D] in_shape={in_shape}, in_dtype={in_dtype}, in_nbytes={in_nbytes}, remaining={remaining}"
             ))
 
@@ -104,7 +104,7 @@ class DecoderThread(BaseThread):
                     return
 
                 if remaining < 0 or img_buffer is None:
-                    print(yellow("remaining < 0 or img_buffer is None"))
+                    print(yellow("[V][D] remaining < 0 or img_buffer is None"))
                     remaining = 0
                     self.release()
                     break
@@ -133,7 +133,7 @@ class DecoderThread(BaseThread):
                 )
                 if verbose:
                     print(
-                        f"[V][D] ({lightgreen(f_index)}) ({f_no}), {remaining}. Tensor:",
+                        f"[V][D] ({lightcyan(f_index)}) ({f_no}), {remaining}. Tensor:",
                         f"{d_tensor.shape}, {d_tensor.dtype}"
                     )
 
@@ -145,7 +145,7 @@ class DecoderThread(BaseThread):
                 f_no += 1
 
         if self.verbose:
-            print(lightgreen(f"[V][D] End of decoding"))
+            print(lightcyan(f"[V][D] End of decoding"))
 
 
     def stop(self, force: bool=False) -> None:
