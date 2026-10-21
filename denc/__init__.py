@@ -7,7 +7,7 @@ from .video_io import (
     new,
 )
 from .decoder import decode_frames
-from .encoder import write
+from .encoder import write, generate_encoder_command
 from .img.io import (
     img_info,
     load_image,
@@ -125,4 +125,6 @@ __all__ = [
     "add_io_arguments",
     "add_debug_arguments",
     "add_seek_arguments",
+
+    "generate_encoder_command",
 ]

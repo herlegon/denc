@@ -117,7 +117,7 @@ def main():
     # could be set using vstream.set_pipe_format or wait for the encoder to set it
     # print(vstream.pipe_format)
     vstream.shape = in_images[0].shape
-    vstream.set_pipe_format(torch.uint8)
+    vstream.set_pipe_dtype(torch.uint8)
     print(vstream.pipe_format)
     print(vstream.shape)
     # print(vstream.codec)

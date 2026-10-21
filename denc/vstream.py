@@ -52,7 +52,14 @@ class PipeFormat:
     dtype: torch.dtype
     pix_fmt: Literal['rgb24', 'rgb48le']
     shape: FShape
-    nbytes: int
+
+    @property
+    def nbytes(self) -> int:
+        if self.pix_fmt in ('rgb24', 'rgb48le'):
+            return (
+                math.prod(self.shape) * torch.tensor([], dtype=self.dtype).element_size()
+            )
+        return math.prod(self.shape[:2]) * PIXEL_FORMATS[self.pix_fmt]['bpp']
 
 
 
@@ -110,10 +117,11 @@ class VideoStream:
 
     color: ColorInfo = field(default_factory=ColorInfo)
 
-    metadata: Any = None
+    metadata: dict[str, str] = None
 
     resize: FFmpegResizer = field(default_factory=FFmpegResizer)
     device: Device = field(default_factory=Device)
+    pipe_format: PipeFormat = field(default=None, repr=False, compare=False)
 
     parent: Optional[MediaStream] = field(default=None, repr=False, compare=False)
 
@@ -128,11 +136,11 @@ class VideoStream:
             raise NotImplementedError(f"not supported: {pipe_pixel_format}")
 
         shape = self._calculate_pipe_shape()
-        self._pipe_format = PipeFormat(
+        self.pipe_format = PipeFormat(
             dtype=pipe_dtype,
             pix_fmt=pipe_pixel_format.value,
             shape=shape,
-            nbytes=math.prod(shape) * torch.tensor([], dtype=pipe_dtype).element_size(),
+            # nbytes=math.prod(shape) * torch.tensor([], dtype=pipe_dtype).element_size(),
             # device='cpu'
         )
         self._codec = self.codec
@@ -154,16 +162,7 @@ class VideoStream:
         return (h, w, c)
 
 
-    @property
-    def pipe_format(self) -> PipeFormat:
-        self._pipe_format.nbytes = (
-            math.prod(self._pipe_format.shape)
-            * torch.tensor([], dtype=self._pipe_format.dtype).element_size()
-        )
-        return self._pipe_format
-
-
-    def set_pipe_format(self, dtype: torch.dtype | np.dtype) -> None:
+    def set_pipe_dtype(self, dtype: torch.dtype | np.dtype) -> None:
         """Video pipe
         """
         if not isinstance(self, OutVideoStream):
@@ -198,6 +197,8 @@ class OutVideoStream(VideoStream):
     codec_options: Ffv1CodecOption | None = None
     add_prop_suffix: bool = False
     _preset: X26xPreset | None = None
+    _pipe_format: PipeFormat = field(default=None, repr=False, compare=False)
+
 
     def __post_init__(self):
         super().__post_init__()

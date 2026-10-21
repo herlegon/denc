@@ -82,12 +82,15 @@ def pretty(obj, indent: int = 0) -> str:
         if is_dataclass(value):
             lines.append(f"{sub}{f.name}: {type(value).__name__}")
             lines.append(pretty(value, indent + 1))
+
         elif isinstance(value, dict) and value:
             lines.append(f"{sub}{f.name}:")
             kw = max(len(str(k)) for k in value)
             for k, v in value.items():
                 lines.append(f"{sub}  {str(k):<{kw}} : {_fmt(v)}")
+
         else:
             lines.append(f"{sub}{f.name:<{width}} : {_fmt(value)}")
+
     return "\n".join(lines)
 

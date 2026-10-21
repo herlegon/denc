@@ -18,6 +18,7 @@ class PixFmt(Enum):
     YUV444P = "yuv444p"
     YUV444P10 = "yuv444p10le"
     YUV444P12 = "yuv444p12le"
+    YUV444P16 = "yuv444p16le"
     YUVA444P12 = "yuva444p12le"
     RGB24 = "rgb24"
     RGB48 = "rgb48le"
@@ -71,8 +72,8 @@ def list_pixel_formats() -> dict[str, dict[str, bool | int | str]]:
                 supported: bool = True
 
             pixel_formats[k] = {
-                'nc': nc,
-                'bpp': bpp,
+                'nc': int(nc),
+                'bpp': int(bpp),
                 'pipe_bpc': max(_depths),
                 'pipe_bpp': sum(_depths),
                 'pipe_pxl_fmt': pix_fmt,
