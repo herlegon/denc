@@ -107,6 +107,7 @@ def ffmpeg_color_range(
 colorspace_to_params = {
     # colorspace, primaries, transfer (trc)
     ColorSpace.UNKNOWN: ("unknown", "unknown", "unknown"),
+    ColorSpace.BT470G: ("bt470bg", "bt470bg", "bt470bg"), # bt470bg for x265
     ColorSpace.REC601_PAL: ("bt470bg", "bt470bg", "gamma28"), # bt470bg for x265
     ColorSpace.REC601_NTSC: ("smpte170m", "smpte170m", "smpte170m"),
     ColorSpace.REC709: ("bt709", "bt709", "bt709"),
