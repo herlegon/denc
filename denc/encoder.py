@@ -102,7 +102,6 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
     #     raise NotImplementedError(f"not supported: {pipe_pixel_format}")
 
     dlogger.debug(f"""{purple("Encoder pipe:")}
-          vstream.pix_fmt: {vstream.pix_fmt.value}
           shape: {pipe.shape}
           dtype: {pipe.dtype}
           pixfmt: {pipe.pix_fmt}
@@ -239,7 +238,7 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
         "-vcodec", vcodec_to_ffmpeg_vcodec[vstream.codec],
         *vcodec_options,
 
-        # *profile_args,
+        *profile_args,
         *tune_args,
         *crf_args,
         *preset_args,

@@ -59,7 +59,7 @@ class PipeFormat:
             return (
                 math.prod(self.shape) * torch.tensor([], dtype=self.dtype).element_size()
             )
-        return math.prod(self.shape[:2]) * PIXEL_FORMATS[self.pix_fmt]['bpp']
+        return int(math.prod(self.shape[:2]) * PIXEL_FORMATS[self.pix_fmt]['pipe_bpp'] / 8)
 
 
 
