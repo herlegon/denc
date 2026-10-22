@@ -222,7 +222,8 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
         ffmpeg_exe,
         "-hide_banner",
         "-loglevel", "warning",
-        "-stats",
+        "-nostats",
+        "-progress", "pipe:1",
 
         "-f", "rawvideo",
         "-pixel_format", pipe.pix_fmt,
