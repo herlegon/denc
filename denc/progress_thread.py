@@ -16,8 +16,10 @@ class ProgressThread(BaseThread):
         self,
         total: int = 0,
         refresh_rate: int = 2,
+        description: str = "[green]Processing...",
     ) -> None:
         super().__init__()
+        self.description = description
         self._stop_event = Event()
         self._stop_event.clear()
         self.in_queue: Queue = Queue()
@@ -39,7 +41,7 @@ class ProgressThread(BaseThread):
 
         in_queue: Queue = self.in_queue
         in_queue.put((0, 0))
-        self.progress = Progress(
+        progress = Progress(
             BarColumn(bar_width=40),
             "[progress.percentage]{task.percentage:>3.1f}%",
             "frame:",
@@ -52,9 +54,9 @@ class ProgressThread(BaseThread):
             TimeRemainingColumn(),
             refresh_per_second=self.refresh_rate,
         )
-        self.progress.start()
-        self.task_id = self.progress.add_task(
-            "[green] Processing...",
+        progress.start()
+        self.task_id = progress.add_task(
+            self.description,
             total=self.total,
             encoded=0,
             fps=0,
@@ -62,68 +64,74 @@ class ProgressThread(BaseThread):
         )
 
         previous_encoded = 0
-        self.start_time = time.time()
+        previous_encoded = 0
+        self.start_time = time.perf_counter()
         self.previous_timestamp = self.start_time
         self.encoding_start_time = self.start_time
-        while not self._stop_event.is_set():
-            data = in_queue.get(block=True)
-            if data is None:
-                break
-            encoded, elapsed = data
-            self.progress.update(
-                self.task_id,
-                advance=encoded - previous_encoded,
-                encoded=encoded,
-                fps=float(encoded) / elapsed if elapsed else 0,
-            )
-            previous_encoded = encoded
 
-            # if elapsed:
-            #     fps = encoded / elapsed
-            #     print(
-            #         " ".join((
-            #         purple(f"{(100 * encoded)/self.total:0.1f}%"),
-            #         f"frame: {encoded}/{self.total}",
-            #         f"elapsed=", yellow(f"{int(elapsed)}"),
-            #         f"fps= {fps:.1f}",
-            #         blue(f"ETA {int(fps * encoded)}"),
-            #         '\r')),
-            #         # end='\r',
-            #         file=sys.stdout,
-            #         flush = True
-            #     )
+        with progress:
+            while not self._stop_event.is_set():
+                data = in_queue.get(block=True)
+                if data is None:
+                    break
+                encoded, elapsed = data
+                progress.update(
+                    self.task_id,
+                    advance=encoded - previous_encoded,
+                    encoded=encoded,
+                    fps=float(encoded) / elapsed if elapsed else 0,
+                )
+                previous_encoded = encoded
 
-            if self._stop_event.is_set():
-                break
+                # if elapsed:
+                #     fps = encoded / elapsed
+                #     print(
+                #         " ".join((
+                #         purple(f"{(100 * encoded)/self.total:0.1f}%"),
+                #         f"frame: {encoded}/{self.total}",
+                #         f"elapsed=", yellow(f"{int(elapsed)}"),
+                #         f"fps= {fps:.1f}",
+                #         blue(f"ETA {int(fps * encoded)}"),
+                #         '\r')),
+                #         # end='\r',
+                #         file=sys.stdout,
+                #         flush = True
+                #     )
 
-        self.progress.stop()
+                if self._stop_event.is_set():
+                    break
+
         time.sleep(0.1)
         self.is_running = False
 
 
     def stop(self, force: bool=False) -> None:
         if force:
-            self.progress.stop()
             while not self.in_queue.empty():
-                self.in_queue.get_nowait()
+                try:
+                    self.in_queue.get_nowait()
+                except Exception:
+                    break
         self.in_queue.put_nowait(None)
         self._stop_event.set()
 
 
-    def put(self, value: int | None, force: bool = False):
-        if value is None:
-            self._elapsed = time.time() - self.encoding_start_time
+    def put(self, delta: int | None, force: bool = False):
+        now = time.perf_counter()
+        if delta is None:
+            self._elapsed = now - (self.encoding_start_time or now)
+            self.in_queue.put_nowait((self.encoded, self._elapsed))
             self.in_queue.put_nowait(None)
             return
 
         if self.encoding_start_time == 0:
-            self.encoding_start_time = time.time()
+            self.encoding_start_time = now
 
-        self.encoded += value
+        self.encoded += delta
 
-        if (time.time() - self.previous_timestamp) >= self.interval or force:
-            self.in_queue.put_nowait((self.encoded, time.time() - self.start_time))
-            self.previous_timestamp = time.time()
+        if (now - self.previous_timestamp) >= self.interval or force:
+            self.previous_timestamp = now
+            self.in_queue.put_nowait((self.encoded, now - self.start_time))
 
 
     def elapsed(self) -> float:

@@ -89,7 +89,7 @@ def pretty_print_cmd(args: list[str]) -> str:
 
 
 
-def generate_encoder_command(media: MediaStream) -> list[str]:
+def generate_encoder_command(media: MediaStream, progress: bool=False) -> list[str]:
     vstream: OutVideoStream = media.video
 
     pipe: PipeFormat = vstream.pipe_format
@@ -216,14 +216,19 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
         vstream.filepath = filepath
         vstream.parent.filepath = filepath
 
+    # Progress
+    progress_args = ["-nostats", "-progress", "pipe:1"] if progress else []
+
+    # other
+    overwrite_args = ["-y",] if media.overwrite else []
+
     # Create command as a list
     h, w = pipe.shape[:2]
     e_command: list[str] = [
         ffmpeg_exe,
         "-hide_banner",
-        "-loglevel", "warning",
-        "-nostats",
-        "-progress", "pipe:1",
+        "-loglevel", "error",
+        *progress_args,
 
         "-f", "rawvideo",
         "-pixel_format", pipe.pix_fmt,
@@ -248,7 +253,8 @@ def generate_encoder_command(media: MediaStream) -> list[str]:
         *color_range_args,
         *as_args,
         # *metadata,
-        str(filepath), "-y"
+        *overwrite_args,
+        str(filepath)
     ]
 
     dlogger.debug(f"{purple("Encoder command:")}\n{subprocess.list2cmdline(e_command)}")

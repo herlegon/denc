@@ -21,6 +21,7 @@ class MediaStream:
     seek: Seek = field(default=None, init=False)
     filepath: Optional[Path] = None
     container: Optional[ContainerFormat] = field(default=None, init=False)
+    overwrite: bool = False,
     # Add the property to the basename
     add_prop_suffix: bool = False
 
