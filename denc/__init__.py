@@ -22,6 +22,7 @@ from .torch_tensor import (
 )
 
 from .vstream import (
+    VideoStreamFormat,
     VideoStream,
     OutVideoStream,
     Device,
@@ -104,6 +105,7 @@ __all__ = [
     "decode_frames",
     "write",
 
+    "VideoStreamFormat",
     "VideoStream",
     "OutVideoStream",
     "vcodec_to_extension",

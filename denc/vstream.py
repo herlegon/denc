@@ -76,7 +76,20 @@ class FFmpegResizer:
     use_sar: bool = True
     algorithm: Literal['lanczos', 'bicubic'] = 'bicubic'
     side: Literal['width', 'height'] = 'width'
-    size: tuple[int, int] = ( 0, 0)
+    size: tuple[int, int] = (0, 0)
+
+
+
+@dataclass(slots=True)
+class VideoStreamFormat:
+    shape: FShape
+    dtype: torch.dtype
+    pix_fmt: Literal['rgb']
+    frame_count: int
+
+    @property
+    def frame_nbytes(self) -> int:
+        return math.prod(self.shape) * torch.empty(0, dtype=self.dtype).element_size()
 
 
 
@@ -185,6 +198,15 @@ class VideoStream:
         if device == "cpu":
             dtype = torch.float32
         self.device = Device(name=device, dtype=dtype)
+
+
+    def stream_format(self) -> VideoStreamFormat:
+        return VideoStreamFormat(
+            shape=self.shape,
+            dtype=self.pipe_format.dtype,
+            pix_fmt=self.pipe_format.pix_fmt,
+            frame_count=self.parent.seek.count
+        )
 
 
 
