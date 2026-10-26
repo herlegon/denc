@@ -59,8 +59,9 @@ from .nnframe import NnFrame
 from .common_arg_parse import (
     BoundedInteger,
     add_io_arguments,
-    add_debug_arguments,
     add_seek_arguments,
+    add_sar_arguments,
+    add_debug_arguments,
 )
 
 from .dlogger import dlogger
@@ -123,8 +124,9 @@ __all__ = [
 
     "BoundedInteger",
     "add_io_arguments",
-    "add_debug_arguments",
     "add_seek_arguments",
+    "add_sar_arguments",
+    "add_debug_arguments",
 
     "generate_encoder_command",
 ]

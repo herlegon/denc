@@ -104,6 +104,34 @@ Refer to https://ffmpeg.org//ffmpeg.html#Main-options"
     )
 
 
+def add_sar_arguments(parser: ArgumentParser) -> None:
+    parser.add_argument(
+        "-fsar",
+        "--fsar",
+        type=str,
+        default="",
+        help="""SAR metadata may be not present in input video.
+Use this one to resize the video and overwrite the one specified in metadata
+Keep the height, modify the width.
+It should normally never be used as it's really very specific.
+format: 4/3 (or 16/9, etc.)
+\n"""
+    )
+
+    parser.add_argument(
+        "-fsar_h",
+        "--fsar_h",
+        type=str,
+        default="",
+        help="""SAR metadata may be not present in input video.
+Use this one to resize the video and overwrite the one specified in metadata.
+Keep the width, modify the height.
+It should normally never be used as it's really very specific.
+format: 4/3 (or 16/9, etc.)
+\n"""
+    )
+
+
 
 def add_debug_arguments(parser: ArgumentParser) -> None:
     parser.add_argument(
