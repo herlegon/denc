@@ -9,7 +9,7 @@ import torch
 from torch import Tensor
 from torch.cuda import StreamContext
 
-from .io import write_image
+from .img_io import write_image
 from ..torch_tensor import tensor_to_img
 from ..dh_transfers import dtoh_transfer
 

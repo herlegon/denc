@@ -10,7 +10,6 @@ DEFAULT_H265_FFMPEG_ARGS: str = """
 """
 
 DEFAULT_HVEC_NVENC_FFMPEG_ARGS: str = """
-    -profile:v main
     -b_ref_mode disabled
     -tag:v hvc1
     -g 30

@@ -1,7 +1,9 @@
 from __future__ import annotations
 import abc
 from collections.abc import Callable
-from threading import Thread
+import queue
+from queue import Queue
+from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, Type
 import numpy as np
 import torch
@@ -32,6 +34,12 @@ class BaseThread(abc.ABC, Thread):
         self._processing: bool = True
         self._is_cuda_workflow: bool = False
 
+        self._stop_event = Event()
+        self._stop_event.clear()
+        self.in_queue: Queue = Queue(1)
+        self.prescale: tuple[int, int, int] | None = None
+        self.infer_stream: torch.cuda.Stream = None
+
 
     @property
     def verbose(self) -> bool:
@@ -47,10 +55,16 @@ class BaseThread(abc.ABC, Thread):
         return (self._has_error, self._error_msg)
 
 
-    @abc.abstractmethod
     def stop(self, force: bool=False) -> None:
-        pass
+        self._stop_event.set()
+        if force:
+            while not self.in_queue.empty():
+                self.in_queue.get_nowait()
+        self.put_frame(None)
 
+
+    def ended(self) -> bool:
+        return self.in_queue.empty()
 
     def set_producer(self, producer: Type[BaseThread]) -> None:
         self.producer = producer
@@ -73,8 +87,14 @@ class BaseThread(abc.ABC, Thread):
         pass
 
 
-    def put_frame(self, frame: NnFrame) -> None:
-        pass
+    def put_frame(self, frame: NnFrame) -> bool:
+        try:
+            self.in_queue.put(frame)
+            return True
+        except queue.Full:
+            print("[V][I] no place")
+            pass
+        return False
 
 
     def set_progress_thread(self, progress_thread: ProgressThread) -> None:

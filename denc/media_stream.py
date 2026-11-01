@@ -2,13 +2,14 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from pprint import pprint
 from typing import Optional
 
 from .encoder import write
 from .seek import Seek
 from .vstream import OutVideoStream, VideoStream
 
-from .audio import AudioStreams
+from .astream import AudioStreams
 from .subtitles import SubtitleStreams
 from .container import ContainerFormat
 
@@ -80,8 +81,7 @@ class MediaStream:
 
         subtitles: SubtitleStreams = deepcopy(self.subtitles)
         subtitles.filepath = self.filepath
-
-        return replace(
+        new = replace(
             self,
             video=OutVideoStream.from_video_stream(self.video),
             audio=audio,
@@ -89,4 +89,6 @@ class MediaStream:
             filepath=filepath,
             # seek est recréé par __post_init__
         )
+
+        return new
 

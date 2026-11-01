@@ -14,27 +14,27 @@ from pprint import pformat, pprint
 import subprocess
 from warnings import warn
 
-from .color_space import ColorInfo, ColorRange, ColorSpace, parse_color_range
+from ..color_space import ColorInfo, ColorRange, ColorSpace, parse_color_range
 
-from .media_stream import (
+from ..media_stream import (
     MediaStream,
     VideoStream,
     AudioStreams,
     SubtitleStreams,
 )
-from .container import SUPPORTED_CONTAINER_FORMATS
-from .pxl_fmt import _EXTRA_PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
-from .tools import ffprobe_exe
-from .time_conversions import FrameRate
-from .vcodec import VideoCodec
-from .profiles import H265_PROFILE_PIXFMT, PROBE_TO_PROFILE_MAP, VCODEC_PROFILES, dnxhr_profiles_for
-from .vstream import FieldOrder, OutVideoStream
-from .utils import parse_fraction
+from ..container import SUPPORTED_CONTAINER_FORMATS
+from ..pxl_fmt import _EXTRA_PIX_FMT_MAP, PIXEL_FORMATS, PixFmt
+from ..tools import ffprobe_exe
+from ..time_conversions import FrameRate
+from ..vcodec import VideoCodec
+from ..profiles import H265_PROFILE_PIXFMT, PROBE_TO_PROFILE_MAP, VCODEC_PROFILES, dnxhr_profiles_for
+from ..vstream import FieldOrder, OutVideoStream
+from ..utils import parse_fraction
 
-from .audio import AudioStream
-from .subtitles import SubtitleStream
+from ..astream import AudioStream
+from ..subtitles import SubtitleStream
 
-from .dlogger import dlogger
+from ..dlogger import dlogger
 
 
 
@@ -403,7 +403,7 @@ def open(filepath: Path) -> MediaStream | None:
 
 
 
-def new(filepath: str = "", preset = None) -> MediaStream:
+def new(filepath: str = "") -> MediaStream:
     vstream = OutVideoStream(
         filepath=filepath,
         codec=VideoCodec.H265,

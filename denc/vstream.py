@@ -38,6 +38,19 @@ if TYPE_CHECKING:
 FShape = tuple[int, int, int]
 
 
+class InputPattern(Enum):
+    SMPTEHDBARS = "smptehdbars"
+    YUVTESTSRC = "yuvtestsrc"
+    COLORCHART = "colorchart"
+
+
+pretty_pattern_name: dict[InputPattern, str] = {
+    InputPattern.SMPTEHDBARS: "smpte",
+    InputPattern.YUVTESTSRC: "yuv",
+    InputPattern.COLORCHART: "cchart",
+}
+
+
 class FieldOrder(Enum):
     PROGRESSIVE = 'progressive' # Progressive
     TOP_FIELD_FIRST = 'tt'      # Interlaced, top field coded and displayed first
@@ -84,7 +97,7 @@ class FFmpegResizer:
 class VideoStreamFormat:
     shape: FShape
     dtype: torch.dtype
-    pix_fmt: Literal['rgb']
+    pix_fmt: Literal['rgb'] | None
     frame_count: int
 
     @property
@@ -117,7 +130,7 @@ class VideoStream:
 
     pix_fmt: PixFmt
 
-    is_frame_rate_fixed: bool = False
+    is_frame_rate_fixed: bool = True
 
     sar: Fraction = Fraction(1, 1)
     dar: Fraction = Fraction(1, 1)
@@ -140,22 +153,23 @@ class VideoStream:
 
 
     def __post_init__(self):
-        pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
-        if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
-            pipe_dtype: torch.dtype = torch.uint8
-        elif pipe_pixel_format in (PixFmt.RGB48, PixFmt.RGBA48):
-            pipe_dtype: torch.dtype = torch.uint16
-        else:
-            raise NotImplementedError(f"not supported: {pipe_pixel_format}")
+        if not isinstance(self, OutVideoStream):
+            pipe_pixel_format: PixFmt = PIXEL_FORMATS[self.pix_fmt.value]['pipe_pxl_fmt']
+            if pipe_pixel_format in (PixFmt.RGB24, PixFmt.RGBA24):
+                pipe_dtype: torch.dtype = torch.uint8
+            elif pipe_pixel_format in (PixFmt.RGB48, PixFmt.RGBA48):
+                pipe_dtype: torch.dtype = torch.uint16
+            else:
+                raise NotImplementedError(f"not supported: {pipe_pixel_format}")
 
-        shape = self._calculate_pipe_shape()
-        self.pipe_format = PipeFormat(
-            dtype=pipe_dtype,
-            pix_fmt=pipe_pixel_format.value,
-            shape=shape,
-            # nbytes=math.prod(shape) * torch.tensor([], dtype=pipe_dtype).element_size(),
-            # device='cpu'
-        )
+            shape = self._calculate_pipe_shape()
+            self.pipe_format = PipeFormat(
+                dtype=pipe_dtype,
+                pix_fmt=pipe_pixel_format.value,
+                shape=shape,
+                # nbytes=math.prod(shape) * torch.tensor([], dtype=pipe_dtype).element_size(),
+                # device='cpu'
+            )
         self._codec = self.codec
 
 
@@ -176,7 +190,7 @@ class VideoStream:
 
 
     def set_pipe_dtype(self, dtype: torch.dtype | np.dtype) -> None:
-        """Video pipe
+        """Video pipe from/to FFmpeg
         """
         if not isinstance(self, OutVideoStream):
             return
@@ -200,13 +214,16 @@ class VideoStream:
         self.device = Device(name=device, dtype=dtype)
 
 
-    def stream_format(self) -> VideoStreamFormat:
-        return VideoStreamFormat(
-            shape=self.shape,
-            dtype=self.pipe_format.dtype,
-            pix_fmt=self.pipe_format.pix_fmt,
-            frame_count=self.parent.seek.count
-        )
+    def stream_format(self) -> VideoStreamFormat | None:
+        # The decoder will output frame in this format
+        if not isinstance(self, OutVideoStream):
+            return VideoStreamFormat(
+                shape=self.shape,
+                dtype=self.pipe_format.dtype,
+                pix_fmt="rgb",
+                frame_count=self.parent.seek.count
+            )
+        return None
 
 
 
@@ -219,13 +236,32 @@ class OutVideoStream(VideoStream):
     codec_options: Ffv1CodecOption | None = None
     add_prop_suffix: bool = False
     _preset: X26xPreset | None = None
+    # Input stream format
+    _stream_format: VideoStreamFormat = field(default=None, repr=False, compare=False)
+    # FFmpeg pipe format: the encoder thread is in charge of converting
+    #   from input stream format to this pipe format
     _pipe_format: PipeFormat = field(default=None, repr=False, compare=False)
+    # Used to generate a video from pattern
+    _from_pattern: InputPattern = field(default=None, repr=False, compare=False)
 
 
     def __post_init__(self):
         super().__post_init__()
         self._codec: VideoCodec = self.codec
         # self.set_pipe_format(dtype=self.dtype)
+
+
+    @property
+    def input_stream_format(self) -> VideoStreamFormat:
+        return self._stream_format
+
+
+    @input_stream_format.setter
+    def input_stream_format(self, stream_format: VideoStreamFormat) -> None:
+        self._stream_format = stream_format
+        # Update FFmpeg pipe shape
+        self.pipe_format.shape = stream_format.shape
+
 
     @property
     def codec(self) -> VideoCodec:
@@ -359,4 +395,14 @@ class OutVideoStream(VideoStream):
         new = cls(filepath=None, parent=None, **kwargs)
         if is_out:
             new._pipe_format = deepcopy(vs._pipe_format)
+
         return new
+
+
+    @property
+    def from_pattern(self) -> InputPattern:
+        return self._from_pattern
+
+    @from_pattern.setter
+    def from_pattern(self, pattern: InputPattern) -> None:
+        self._from_pattern = pattern

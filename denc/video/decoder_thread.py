@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 import warnings
 from threading import Event, Lock
 import torch
@@ -7,17 +8,17 @@ from torch.cuda import StreamContext
 
 from hytils import lightcyan, lightgreen, red, yellow
 
-from .base_thread import BaseThread, NnFrame
-from .decoder import decoder_subprocess
-from .dh_transfers import htod_transfer
-from .media_stream import MediaStream
-from .torch_tensor import img_to_tensor
-from .vstream import (
+from ..base_thread import BaseThread, NnFrame
+from ..decoder import decoder_subprocess
+from ..dh_transfers import htod_transfer
+from ..media_stream import MediaStream
+from ..torch_tensor import img_to_tensor
+from ..vstream import (
     FShape,
     PipeFormat,
     VideoStream,
 )
-from .dlogger import dlogger
+from ..dlogger import dlogger
 
 warnings.filterwarnings("ignore", category=UserWarning, message=".*non-writable tensors.*")
 
@@ -64,7 +65,7 @@ class DecoderThread(BaseThread):
             cuda_stream: torch.cuda.Stream = torch.cuda.Stream(vstream.device)
             stream_context: StreamContext = torch.cuda.stream(cuda_stream)
             host_mem: Tensor = torch.empty(nbytes, dtype=torch.uint8, pin_memory=True)
-
+            dlogger.debug(f"{f"[D] host memory:"} shape: {[pipe.shape]} dtype={pipe.dtype} nbytes={pipe.nbytes}")
         else:
             from contextlib import nullcontext
             stream_context = nullcontext()
@@ -76,6 +77,8 @@ class DecoderThread(BaseThread):
 
         # Image to tensor
         tensor_dtype = vstream.device.dtype
+        # All input frames (from FFmpeg pipe) are already in RGB
+        # flip_r_b: bool = bool(self.vpi.c_order != 'rgb')
 
         # Flow control
         remaining: int = self.media_stream.seek.count
@@ -96,7 +99,10 @@ class DecoderThread(BaseThread):
                 and remaining > 0
             ):
                 # Decode a frame in CPU
-                img_buffer: Tensor = torch.frombuffer(d_stdout.read(in_nbytes), dtype=torch.uint8)
+                img_buffer: Tensor = torch.frombuffer(
+                    d_stdout.read(in_nbytes),
+                    dtype=torch.uint8
+                )
 
                 # Wait until resource (GPU) is available
                 self._lock.acquire(blocking=True)
@@ -123,7 +129,14 @@ class DecoderThread(BaseThread):
                     d_img = img_buffer.view(dtype=in_dtype).view(in_shape)
 
                 # Image to 4D tensor
-                d_tensor: Tensor = img_to_tensor(d_img=d_img, tensor_dtype=tensor_dtype)
+                d_tensor: Tensor = img_to_tensor(
+                    d_img=d_img,
+                    tensor_dtype=tensor_dtype,
+                    # flip_r_b=flip_r_b,
+                )
+
+                time.sleep(0.0001)
+                cuda_stream.synchronize()
 
                 # Create a frame object
                 frame: NnFrame = NnFrame(
@@ -133,8 +146,8 @@ class DecoderThread(BaseThread):
                 )
                 if verbose:
                     print(
-                        f"[V][D] ({lightcyan(f_index)}) ({f_no}), {remaining}. Tensor:",
-                        f"{d_tensor.shape}, {d_tensor.dtype}"
+                        f"\n[V][D] ({lightcyan(f_index)}) ({f_no}), {remaining}. Tensor:",
+                        f"{d_tensor.shape}, {d_tensor.dtype}, {d_tensor.data_ptr()}"
                     )
 
                 # Send the frame to the consumer

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
-from denc.audio import audio_subtitles_copy_args
+from denc.astream import audio_subtitles_copy_args
 from hytils import lightgreen, purple, red, yellow
 import numpy as np
 import os
@@ -22,6 +22,7 @@ from .tools import ffmpeg_exe
 
 from .vstream import (
     OutVideoStream,
+    InputPattern,
     PipeFormat,
     VideoCodec,
 )
@@ -100,14 +101,39 @@ def generate_encoder_command(media: MediaStream, progress: bool=False) -> list[s
     #     pipe.dtype = torch.uint16
     # else:
     #     raise NotImplementedError(f"not supported: {pipe_pixel_format}")
+    input_args: list[str] = []
 
-    dlogger.debug(f"""{purple("Encoder pipe:")}
-          shape: {pipe.shape}
-          dtype: {pipe.dtype}
-          pixfmt: {pipe.pix_fmt}
-          nbytes: {pipe.nbytes}"""
-        .replace("    ", " ")
-    )
+    pattern = media.video.from_pattern
+    if pattern is None:
+        h, w = pipe.shape[:2]
+        input_args = [
+            "-f", "rawvideo",
+            "-pixel_format", pipe.pix_fmt,
+            "-video_size", f"{w}x{h}",
+            "-r", str(vstream.frame_rate),
+            "-i", "pipe:0",
+        ]
+        dlogger.debug(f"""{purple("Encoder pipe:")}
+            shape: {pipe.shape}
+            dtype: {pipe.dtype}
+            pixfmt: {pipe.pix_fmt}
+            nbytes: {pipe.nbytes}"""
+            .replace("    ", " ")
+        )
+
+    else:
+        input_args = [
+            "-f", "lavfi",
+            "-i", f"{pattern.value}=rate={vstream.frame_rate}:duration={vstream.duration}",
+        ]
+        if pattern != InputPattern.COLORCHART:
+            h, w, _ = media.video.shape
+            input_args[-1] += f":size={w}x{h}"
+        vstream.pipe_format = PipeFormat(
+            dtype=torch.uint8,
+            shape=(h, w, 3),
+            pix_fmt="rgb"
+        )
 
     vcodec: VideoCodec = vstream.codec
 
@@ -216,6 +242,19 @@ def generate_encoder_command(media: MediaStream, progress: bool=False) -> list[s
         vstream.filepath = filepath
         vstream.parent.filepath = filepath
 
+    # Custom params
+    # custom_params_args: list[str] = custom_params.split(" ")
+
+    # Add metadata
+    metadata_args: list[str] = []
+    # if media.container == ".mkv":
+    #     metadata_args.extend(["-movflags", "use_metadata_tags"])
+    #     metadata: dict[str, str]
+    #     for metadata in (vstream.metadata, in_vi['metadata']):
+    #         if metadata is not None and len(metadata.keys()):
+    #             for k, meta in metadata.items():
+    #                 metadata_args.extend(["-metadata:s:v:0", f"{k}={meta}"])
+
     # Progress
     progress_args = ["-nostats", "-progress", "pipe:1"] if progress else []
 
@@ -223,19 +262,12 @@ def generate_encoder_command(media: MediaStream, progress: bool=False) -> list[s
     overwrite_args = ["-y",] if media.overwrite else []
 
     # Create command as a list
-    h, w = pipe.shape[:2]
     e_command: list[str] = [
         ffmpeg_exe,
         "-hide_banner",
         "-loglevel", "error",
         *progress_args,
-
-        "-f", "rawvideo",
-        "-pixel_format", pipe.pix_fmt,
-        "-video_size", f"{w}x{h}",
-        "-r", str(vstream.frame_rate),
-
-        "-i", "pipe:0",
+        *input_args,
         *as_inputs,
         "-map", "0:v:0",
 
@@ -249,10 +281,11 @@ def generate_encoder_command(media: MediaStream, progress: bool=False) -> list[s
         *crf_args,
         *preset_args,
         *codec_params,
+        # *custom_params_args,
         *colorspace_args,
         *color_range_args,
         *as_args,
-        # *metadata,
+        *metadata_args,
         *overwrite_args,
         str(filepath)
     ]
@@ -400,7 +433,6 @@ def write(
             if not isinstance(media.filepath, Path)
             else media.filepath
         )
-    print(lightgreen(media.video.filepath))
     # Generate the FFmpeg command
     e_command = generate_encoder_command(media=media)
 
@@ -484,7 +516,7 @@ def generate_video_basename_suffix(vstream: OutVideoStream) -> str:
     matrix = vstream.color.matrix
     matrix_str = matrix.value if isinstance(matrix, ColorSpace) else matrix  # str | None
 
-    crf = effective_crf(vcodec, vstream.crf)
+    crf = effective_crf(vcodec, vstream.crf) if vstream.crf is not None else None
     preset = effective_preset(vcodec, vstream.preset)
     profile = effective_profile(vcodec, vstream.profile, vstream.pix_fmt)
     tune = effective_tune(vcodec, vstream.tune)

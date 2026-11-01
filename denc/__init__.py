@@ -2,13 +2,15 @@ from .dlogger import dlogger
 
 from .capabilities import is_codec_supported
 
-from .video_io import (
+from .video.video_io import (
     open,
     new,
 )
+from .container import ContainerFormat
+
 from .decoder import decode_frames
 from .encoder import write, generate_encoder_command
-from .img.io import (
+from .img.img_io import (
     img_info,
     load_image,
     load_image_fp32,
@@ -27,6 +29,7 @@ from .vstream import (
     OutVideoStream,
     Device,
     PipeFormat,
+    InputPattern,
 )
 from .media_stream import MediaStream
 
@@ -50,8 +53,8 @@ from .pxl_fmt import PixFmt, PIXEL_FORMATS, RGB_PREFIXES
 from .color_space import ColorRange, ColorSpace, ColorInfo
 
 from .base_thread import BaseThread
-from .decoder_thread import DecoderThread
-from .encoder_thread import EncoderThread
+from .video.decoder_thread import DecoderThread
+from .video.encoder_thread import EncoderThread
 from .progress_thread import ProgressThread
 
 from .torch_tensor import Idtype
@@ -59,16 +62,20 @@ from .nnframe import NnFrame
 
 from .common_arg_parse import (
     BoundedInteger,
+    add_debug_arguments,
     add_io_arguments,
+    add_model_arguments,
     add_seek_arguments,
     add_sar_arguments,
-    add_debug_arguments,
+    add_resize_arguments,
+    add_inference_arguments,
 )
 
 from .dlogger import dlogger
 
 
 __all__ = [
+    "ContainerFormat",
     "MediaStream",
     "VideoCodec",
     "is_codec_supported",
@@ -109,6 +116,7 @@ __all__ = [
     "VideoStream",
     "OutVideoStream",
     "vcodec_to_extension",
+    "InputPattern",
 
     "PipeFormat",
     "NnFrame",
@@ -125,10 +133,13 @@ __all__ = [
     "dlogger",
 
     "BoundedInteger",
+    "add_debug_arguments",
     "add_io_arguments",
+    "add_model_arguments",
     "add_seek_arguments",
     "add_sar_arguments",
-    "add_debug_arguments",
+    "add_resize_arguments",
+    "add_inference_arguments",
 
     "generate_encoder_command",
 ]

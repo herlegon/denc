@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.cuda import StreamContext
 
 from ..dh_transfers import htod_transfer
-from .io import (
+from .img_io import (
     load_image,
     load_images,
     load_image_as_tensor,
@@ -26,7 +26,7 @@ def _read_images_as_cuda_tensors(
     img_filepaths: list[str],
     device: str = "cuda:0",
     tensor_dtype: torch.dtype | Idtype = 'fp32',
-) -> list[Tensor]:
+) -> list[Tensor] | None:
 
     if not isinstance(tensor_dtype, torch.dtype):
         tensor_dtype = IdtypeToTorch[tensor_dtype]
@@ -120,7 +120,7 @@ def read_images(
         int(multiprocessing.cpu_count() * 3 / 4), multiprocessing.cpu_count() - 2
     )
     if not as_tensor:
-        dtype: np.dtype = torch_dtype_to_np[dtype]
+        dtype: np.dtype = torch_dtype_to_np(dtype)
         in_imgs = load_images(img_filepaths, cpu_count=cpu_count, dtype=dtype)
 
     else:

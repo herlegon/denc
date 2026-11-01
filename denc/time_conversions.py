@@ -10,6 +10,20 @@ from typing import TypeAlias
 FrameRate: TypeAlias = Fraction
 
 
+def frame_rate_to_str(frame_rate: FrameRate) -> str:
+    if (
+        isinstance(frame_rate, int)
+        or isinstance(frame_rate, float) and int(frame_rate) == frame_rate
+    ):
+        return f"{int(frame_rate)}"
+
+    return (
+        f"{frame_rate.numerator/frame_rate.numerator:.02f}"
+        if frame_rate.denominator > 1
+        else f"{frame_rate.numerator}"
+    )
+
+
 def frame_to_s(no: int, frame_rate: FrameRate) -> float:
     return float(no * frame_rate.denominator) / float(frame_rate.numerator)
 

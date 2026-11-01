@@ -79,7 +79,7 @@ class Seek:
     @start.setter
     def start(self, value: int | str) -> None:
         frames = self._to_frames(value, "start")
-        if frames >= self.vstream.frame_count:
+        if self.vstream.frame_count and frames >= self.vstream.frame_count:
             raise ValueError(
                 red(f"Erroneous start value: {frames} >= {self.vstream.frame_count}")
             )

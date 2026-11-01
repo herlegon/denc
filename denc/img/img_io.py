@@ -1,7 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import cv2
 import glob
-from hytils import absolute_path, path_split
+from hytils import absolute_path, path_split, red
 import multiprocessing
 import numpy as np
 import os
@@ -28,11 +28,11 @@ def img_info(img: np.ndarray | torch.Tensor) -> str:
     if isinstance(img, torch.Tensor):
         return f"{img.shape}, {img.dtype}, {img.device}, [{torch.min(img):.03f} .. {torch.max(img):.03f}]"
 
-    if len(img.shape) < 2:
-        w = 1
-        h = img.shape[0]
-    else:
+    if len(img.shape) >= 2:
         h, w = img.shape[:2]
+    else:
+        w = 1
+        h = img.shape[0] # type: ignore
     range_str: str = f"[{np.min(img):.03f} .. {np.max(img):.03f}]"
     return f"{w}x{h}, {img.dtype}, {range_str}"
 
@@ -48,21 +48,23 @@ def load_image(filepath: Path, dtype: np.dtype = np.uint8) -> np.ndarray:
 
 
 def load_image_fp32(filepath: Path) -> np.ndarray:
-    return np_to_float32(
-        cv2.imdecode(
-            np.fromfile(filepath, dtype=np.uint8),
-            cv2.IMREAD_UNCHANGED
+    try:
+        return np_to_float32(
+            cv2.imdecode(
+                np.fromfile(filepath, dtype=np.uint8),
+                cv2.IMREAD_UNCHANGED
+            )
         )
-    )
+    except Exception as e:
+        raise RuntimeError(red(type(e)))
 
 
 def write_image(filepath: Path, img: np.ndarray) -> None:
     # Support uint8 only as these functions aare used for debugging purpose
     # no nedd to improve this
-    out_dir, _, extension = path_split(filepath)
-    os.makedirs(out_dir, exist_ok=True)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     try:
-        _, img_buffer = cv2.imencode(f".{extension}",np_to_uint8(img))
+        _, img_buffer = cv2.imencode(f".{filepath.suffix}",np_to_uint8(img))
         with open(filepath, "wb") as buffered_writer:
             buffered_writer.write(img_buffer)
     except Exception as e:
@@ -103,26 +105,6 @@ def write_images(
         ) as executor:
             executor.map(write_image, filepaths, images)
 
-
-def get_image_list(directory: str | Path, extension: str = '.png') -> list[str]:
-    directory = os.path.normpath(
-        os.path.realpath(absolute_path(str(directory)))
-    )
-    # fastest for simple filtering
-    return [
-        os.path.join(directory, f)
-        for f in sorted(os.listdir(directory)) if f.endswith(extension)
-    ]
-
-    # +50%
-    files: list[str] = glob.glob(
-        f"*{extension}",
-        root_dir=directory,
-        dir_fd=None,
-        recursive=False,
-        include_hidden=False
-    )
-    return [os.path.join(directory, f) for f in sorted(files)]
 
 
 def write_tensor(

@@ -35,7 +35,7 @@
         "../hytils",
         "../hsys",
         "../hinstall",
-        "../denc"
+        "../nnarchs"
     ],
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.diagnosticSeverityOverrides": {
