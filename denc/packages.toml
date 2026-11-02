@@ -36,14 +36,14 @@ do_cache = false
 
 # PyTorch
 [py_packages.delayed.torch.cuda]
-index-url = "https://download.pytorch.org/whl/cu132"
-torch = "2.14.0+cu132"
-torchvision = "0.29.0+cu132"
+index-url = "https://download.pytorch.org/whl/cu134"
+torch = "2.15.0+cu134"
+torchvision = "0.29.2+cu134"
 
 [py_packages.delayed.torch.cpu]
 index-url = "https://download.pytorch.org/whl/cpu"
-torch = "2.14.0+cpu"
-torchvision = "0.29.0+cpu"
+torch = "2.15.0+cpu"
+torchvision = "0.29.2+cpu"
 
 
 # Pretty names

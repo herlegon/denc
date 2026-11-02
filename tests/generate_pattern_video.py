@@ -21,11 +21,9 @@ from denc import (
     MediaStream,
     generate_encoder_command,
     dlogger,
-    ContainerFormat,
     InputPattern,
 )
-from denc.encoder import generate_video_basename_suffix, pretty_print_cmd
-from denc.tools import ffmpeg_exe
+from denc.encoder import pretty_print_cmd
 
 
 
@@ -73,9 +71,9 @@ def main():
     # out_media.container = '.mxf'
     out_media.add_prop_suffix = True
     vstream = out_media.video
-    vstream.codec = VideoCodec.H265
+    vstream.codec = VideoCodec.DNXHR
     vstream.color.matrix = ColorSpace.BT709
-    vstream.pix_fmt = PixFmt.YUV420P10
+    vstream.pix_fmt = PixFmt.YUV422P10
     vstream.frame_rate = FrameRate(25, 1)
     vstream.from_pattern = InputPattern.SMPTEHDBARS
 
