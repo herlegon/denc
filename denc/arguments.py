@@ -18,6 +18,24 @@ class BoundedInteger:
         )
 
 
+class BoundedFloat:
+    def __init__(self, min_value: float, max_value: float) -> None:
+        self.min_value: float = min_value
+        self.max_value: float = max_value
+
+    def __call__(self, value) -> float:
+        try:
+            value = float(value)
+        except:
+            raise ArgumentTypeError(f"Value is not a valid argument.")
+        if self.min_value <= value <= self.max_value:
+            return value
+        raise ArgumentTypeError(
+            f"Value is not a valid argument, allowed range: {self.min_value}..{self.max_value}"
+        )
+
+
+
 
 def add_debug_arguments(parser: ArgumentParser) -> None:
     parser.add_argument(
