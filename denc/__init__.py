@@ -52,13 +52,17 @@ from .tunes import VCODEC_TUNES
 from .pxl_fmt import PixFmt, PIXEL_FORMATS, RGB_PREFIXES
 from .color_space import ColorRange, ColorSpace, ColorInfo
 
-from .base_thread import BaseThread
+from .base_thread import BaseThread, DEC_ENC_HOST_NBUFFERS
 from .video.decoder_thread import DecoderThread
 from .video.encoder_thread import EncoderThread
 from .progress_thread import ProgressThread
 
 from .torch_tensor import Idtype
-from .nnframe import NnFrame
+from .nnframe import (
+    NnFrame,
+    mark_frame_ready,
+    wait_frame_ready,
+)
 
 from .arguments import (
     BoundedInteger,
@@ -122,6 +126,8 @@ __all__ = [
 
     "PipeFormat",
     "NnFrame",
+    "mark_frame_ready",
+    "wait_frame_ready",
     "img_to_tensor",
     "tensor_to_img",
 
@@ -129,6 +135,7 @@ __all__ = [
     "EncoderThread",
     "ProgressThread",
     "BaseThread",
+    "DEC_ENC_HOST_NBUFFERS",
     "Idtype",
     "Device",
 

@@ -71,7 +71,7 @@ def main():
     # out_media.container = '.mxf'
     out_media.add_prop_suffix = True
     vstream = out_media.video
-    vstream.codec = VideoCodec.DNXHR
+    vstream.codec = VideoCodec.H265
     vstream.color.matrix = ColorSpace.BT709
     vstream.pix_fmt = PixFmt.YUV422P10
     vstream.frame_rate = FrameRate(25, 1)

@@ -1,14 +1,14 @@
 from __future__ import annotations
-import time
+import io
 import warnings
 from threading import Event, Lock
 import torch
-from torch import Tensor
 from torch.cuda import StreamContext
+from torch import Tensor
 
-from hytils import lightcyan, lightgreen, red, yellow
+from hytils import lightcyan, red
 
-from ..base_thread import BaseThread, NnFrame
+from ..base_thread import DEC_ENC_HOST_NBUFFERS, BaseThread, NnFrame
 from ..decoder import decoder_subprocess
 from ..dh_transfers import htod_transfer
 from ..media_stream import MediaStream
@@ -18,9 +18,11 @@ from ..vstream import (
     PipeFormat,
     VideoStream,
 )
+from ..nnframe import mark_frame_ready, wait_frame_ready
 from ..dlogger import dlogger
 
 warnings.filterwarnings("ignore", category=UserWarning, message=".*non-writable tensors.*")
+
 
 
 class DecoderThread(BaseThread):
@@ -53,18 +55,22 @@ class DecoderThread(BaseThread):
         if self.consumer is None:
             raise ValueError(red("[E] No consumer defined for the decoder."))
 
-        d_stdout = self.d_subprocess.stdout
-
+        d_stdout: io.BufferedReader = self.d_subprocess.stdout
         vstream: VideoStream = self.media_stream.video
         pipe: PipeFormat = vstream.pipe_format
         nbytes: int = pipe.nbytes
 
         # Create a cuda stream and allocate Host memory
-        cuda = bool("cuda" in vstream.device.name)
+        device = vstream.device.name
+        cuda = bool("cuda" in device)
         if cuda:
-            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(vstream.device)
+            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(device)
             stream_context: StreamContext = torch.cuda.stream(cuda_stream)
-            host_mem: Tensor = torch.empty(nbytes, dtype=torch.uint8, pin_memory=True)
+            host_memories = [torch.empty(nbytes, dtype=torch.uint8, pin_memory=True) for _ in range(DEC_ENC_HOST_NBUFFERS)]
+            views = [b.numpy() for b in host_memories]
+            h2d_done: list[torch.cuda.Event | None] = [None] * DEC_ENC_HOST_NBUFFERS
+            i = 0
+
             dlogger.debug(f"{f"[D] host memory:"} shape: {[pipe.shape]} dtype={pipe.dtype} nbytes={pipe.nbytes}")
         else:
             from contextlib import nullcontext
@@ -98,51 +104,32 @@ class DecoderThread(BaseThread):
                 not self._stop_event.is_set()
                 and remaining > 0
             ):
-                # Decode a frame in CPU
-                img_buffer: Tensor = torch.frombuffer(
-                    d_stdout.read(in_nbytes),
-                    dtype=torch.uint8
-                )
+                if h2d_done[i] is not None:
+                    h2d_done[i].synchronize()
 
-                # Wait until resource (GPU) is available
-                self._lock.acquire(blocking=True)
-                if self._stop_event.is_set():
-                    return
-
-                if remaining < 0 or img_buffer is None:
-                    print(yellow("[V][D] remaining < 0 or img_buffer is None"))
-                    remaining = 0
-                    self.release()
+                # ffmpeg write in host_memories
+                n = d_stdout.readinto(views[i])
+                if n < nbytes:
                     break
 
-                d_img: Tensor
-                if cuda:
-                    # HtoD transfer
-                    d_img = htod_transfer(
-                        host_mem=host_mem,
-                        img_buffer=img_buffer,
-                        img_dtype=in_dtype,
-                        img_shape=in_shape,
-                        cuda_stream=cuda_stream
-                    )
-                else:
-                    d_img = img_buffer.view(dtype=in_dtype).view(in_shape)
-
-                # Image to 4D tensor
-                d_tensor: Tensor = img_to_tensor(
-                    d_img=d_img,
-                    tensor_dtype=tensor_dtype,
-                    # flip_r_b=flip_r_b,
+                d_img: Tensor = (
+                    host_memories[i]
+                    .to(device, non_blocking=True)
+                    .view(in_dtype)
+                    .view(in_shape)
                 )
+                d_tensor = img_to_tensor(d_img=d_img, tensor_dtype=tensor_dtype)
 
-                time.sleep(0.0001)
-                cuda_stream.synchronize()
+                event = torch.cuda.Event()
+                event.record(cuda_stream)
+                h2d_done[i] = event
 
                 # Create a frame object
                 frame: NnFrame = NnFrame(
                     f_no=f_no,
                     tensor=d_tensor.clone(),
-                    last=bool(remaining == 1)
+                    last=bool(remaining == 1),
+                    event=event
                 )
                 if verbose:
                     print(
@@ -156,6 +143,7 @@ class DecoderThread(BaseThread):
                 remaining -= 1
                 f_index += 1
                 f_no += 1
+                i = (i + 1) % DEC_ENC_HOST_NBUFFERS
 
         if self.verbose:
             print(lightcyan(f"[V][D] End of decoding"))

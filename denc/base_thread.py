@@ -2,7 +2,7 @@ from __future__ import annotations
 import abc
 from collections.abc import Callable
 import queue
-from queue import Queue
+from queue import Full, Queue
 from threading import Event, Thread
 from typing import TYPE_CHECKING, Any, Iterable, Mapping, Optional, Type
 import numpy as np
@@ -11,6 +11,9 @@ import torch
 from .nnframe import NnFrame
 if TYPE_CHECKING:
     from .progress_thread import ProgressThread
+
+
+DEC_ENC_HOST_NBUFFERS = 1
 
 
 class BaseThread(abc.ABC, Thread):
@@ -60,6 +63,10 @@ class BaseThread(abc.ABC, Thread):
         if force:
             while not self.in_queue.empty():
                 self.in_queue.get_nowait()
+        try:
+            self.in_queue.put_nowait(None)
+        except Full:
+            pass
         self.put_frame(None)
 
 

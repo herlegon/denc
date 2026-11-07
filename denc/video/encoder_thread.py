@@ -12,12 +12,13 @@ from torch.cuda import StreamContext
 
 from hytils import lightcyan, purple, red
 
-from ..base_thread import BaseThread, NnFrame
+from ..base_thread import DEC_ENC_HOST_NBUFFERS, BaseThread, NnFrame
 from ..encoder import generate_encoder_command
 from ..media_stream import MediaStream
 from ..vstream import FShape, PipeFormat, VideoStream
 from ..progress_thread import ProgressThread
 
+from ..nnframe import mark_frame_ready, wait_frame_ready
 from ..dh_transfers import dtoh_transfer
 from ..torch_tensor import tensor_to_img
 from ..dlogger import dlogger
@@ -45,6 +46,8 @@ class EncoderThread(BaseThread):
     @property
     def encoded(self) -> int:
         return self._encoded
+
+
 
 
     @torch.inference_mode()
@@ -104,17 +107,29 @@ class EncoderThread(BaseThread):
         e_stdout: IO = self.e_subprocess.stdout
 
         # Create a cuda stream and allocate Host memory
-        cuda = bool("cuda" in vstream.device.name)
+        device = vstream.device.name
+        cuda = bool("cuda" in device)
         if cuda:
-            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(vstream.device.name)
+            cuda_stream: torch.cuda.Stream = torch.cuda.Stream(device)
             stream_context: StreamContext = torch.cuda.stream(cuda_stream)
-            host_mem: Tensor = torch.empty(
-                img_shape, dtype=pipe.dtype, pin_memory=True
-            )
+            host_memories: list[Tensor] = [
+                torch.empty(img_shape, dtype=pipe.dtype, pin_memory=True)
+                for _ in range(DEC_ENC_HOST_NBUFFERS)
+            ]
             dlogger.debug(f"{purple(f"[E] host memory:")} shape: {[img_shape]} dtype={pipe.dtype}")
+            d2h_done = [None] * DEC_ENC_HOST_NBUFFERS
+            pending = None
+            i = 0
+
+            def write_pending(i):
+                d2h_done[i].synchronize()               # attend uniquement ce D2H
+                e_stdin.write(host_memories[i].numpy())         # I/O, GIL libéré
+
         else:
             from contextlib import nullcontext
             stream_context = nullcontext()
+
+
 
         # Loop until last frame
         with stream_context:
@@ -131,48 +146,24 @@ class EncoderThread(BaseThread):
                     break
 
                 frame: NnFrame = input
-                d_tensor = frame.tensor
+                wait_frame_ready(frame=frame, cuda_stream=cuda_stream)
 
-                # Get tensor from frame
-                if verbose:
-                    dlogger.debug(
-                        f"{purple(f"[V][E] Received no. {received}:")} {d_tensor.shape}, {d_tensor.dtype}, {d_tensor.data_ptr()}"
-                    )
-                    received += 1
-                d_img: Tensor = tensor_to_img(tensor=d_tensor, img_dtype=img_dtype)
+                d_img = tensor_to_img(tensor=frame.tensor, img_dtype=img_dtype)
+                host_memories[i].copy_(d_img, non_blocking=True)
+                mark_frame_ready(frame=frame, stream=cuda_stream)
+                d2h_done[i] = frame.event
+                del frame
 
-                out_img: np.ndarray
-                if cuda:
-                    out_img = dtoh_transfer(
-                        host_mem=host_mem,
-                        d_img=d_img,
-                        cuda_stream=cuda_stream
-                    )
 
-                else:
-                    out_img = d_img.contiguous().numpy()
+                # Pendant que le D2H de la frame N tourne, on écrit la frame N-1
+                if pending is not None:
+                    write_pending(pending)
+                pending = i
+                i = (i + 1) % DEC_ENC_HOST_NBUFFERS
 
-                # Remove pointer to the tensor so that memory will be deallocated
-                # del frame.tensor
-                if verbose:
-                    dlogger.debug(f"{purple(f"[V][E] send to FFmpeg pipe:")} {out_img.shape}, {out_img.dtype}")
-
-                # Send it to the encoder
-                try:
-                    e_stdin.write(out_img)
-                except Exception as e:
-                    dlogger.error(f"failed send {type(out_img)}: {e}")
-                    stdout: str = e_stdout.read().decode("utf-8")
-                    pprint(stdout.split('\n'))
-                    break
-
-                remaining -= 1
-                sent = 1
-
-                # Progress: rich or gui...
+                self._encoded += 1
                 if self.progress_thread is not None:
-                    self.progress_thread.put(sent)
-                self._encoded += sent
+                    self.progress_thread.put(1)
 
                 # let the producer know that we're waiting for a new frame
                 if self.producer is not None:
@@ -215,11 +206,7 @@ class EncoderThread(BaseThread):
 
 
     def stop(self, force: bool=False) -> None:
-        self._stop_event.set()
-        if force:
-            while not self.in_queue.empty():
-                self.in_queue.get_nowait()
-        self.put_frame(None)
+        super().stop(force=force)
         self._processing = False
 
 
