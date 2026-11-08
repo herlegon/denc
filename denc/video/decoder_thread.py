@@ -47,9 +47,16 @@ class DecoderThread(BaseThread):
     def decoded(self) -> int:
         return self._decoded
 
+    def run(self) -> None:
+        try:
+            self.decode()
+
+        except Exception as e:
+            dlogger.error(red(f"[E] {str(e)}"))
+
 
     @torch.inference_mode()
-    def run(self) -> None:
+    def decode(self) -> None:
         verbose = self.verbose
 
         if self.consumer is None:

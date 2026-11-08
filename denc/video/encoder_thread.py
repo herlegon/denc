@@ -49,10 +49,16 @@ class EncoderThread(BaseThread):
         return self._encoded
 
 
+    def run(self) -> None:
+        try:
+            self.encode()
+
+        except Exception as e:
+            dlogger.error(red(f"[E] {str(e)}"))
 
 
     @torch.inference_mode()
-    def run(self) -> None:
+    def encode(self) -> None:
         # Use verbose to avoid generating a string every time
         verbose: bool = self.verbose
 
@@ -155,15 +161,12 @@ class EncoderThread(BaseThread):
                     write_oldest()
 
                 remaining -= 1
-                self._encoded += 1
 
                 # let the producer know that we're waiting for a new frame
                 if self.producer is not None:
                     self.producer.set_produce_flag()
 
-            dlogger.info(
-                f"{purple(f"[V][E] ended")}"
-            )
+            dlogger.debug(f"{purple(f"[V][E] ended")}")
             while pending:
                 write_oldest()
 
