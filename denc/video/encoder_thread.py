@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import deque
 import math
 from pprint import pprint
 from queue import Queue
@@ -63,24 +64,6 @@ class EncoderThread(BaseThread):
         received: int = 0
         remaining: int = self.media_stream.seek.count
 
-        # Wait for first frame to start encoder
-        # input = in_queue.get(block=True)
-        # if input is None or self._stop_event.is_set():
-        #     if verbose:
-        #         dlogger.debug(purple("[V][E] Received Null tensor"))
-        #     self._processing = False
-        #     return
-        # skip_first_frame = True
-
-        # The pipe is modified using this first frame
-        # frame: NnFrame = input
-        # d_tensor = frame.tensor
-        # _, c, h, w = d_tensor.shape
-        # pipe.shape = (h, w, c)
-        # pipe.nbytes = (
-        #     math.prod(pipe.shape) * torch.tensor([], dtype=pipe.dtype).element_size()
-        # )
-        # cuda = bool("cuda" in str(d_tensor.device))
         img_dtype: np.dtype = pipe.dtype
         img_shape: FShape = pipe.shape
 
@@ -117,18 +100,23 @@ class EncoderThread(BaseThread):
                 for _ in range(DEC_ENC_HOST_NBUFFERS)
             ]
             dlogger.debug(f"{purple(f"[E] host memory:")} shape: {[img_shape]} dtype={pipe.dtype}")
+            pending: deque[int] = deque()
             d2h_done = [None] * DEC_ENC_HOST_NBUFFERS
-            pending = None
             i = 0
 
-            def write_pending(i):
-                d2h_done[i].synchronize()               # attend uniquement ce D2H
-                e_stdin.write(host_memories[i].numpy())         # I/O, GIL libéré
+            def write_oldest():
+                j = pending.popleft()
+                d2h_done[j].synchronize()                 # attend uniquement ce D2H
+                e_stdin.write(host_memories[j].numpy())
+                self._encoded += 1
+                if self.progress_thread is not None:
+                    self.progress_thread.put(1)
+
 
         else:
             from contextlib import nullcontext
             stream_context = nullcontext()
-
+            pending: deque[int] = deque()
 
 
         # Loop until last frame
@@ -141,34 +129,43 @@ class EncoderThread(BaseThread):
                 input = in_queue.get(block=True)
                 if input is None or self._stop_event.is_set():
                     if verbose:
-                        dlogger.debug(purple("[V][E] Received Null tensor"))
+                        dlogger.info(purple("[V][E] Abort: received Null tensor"))
                     self.end_encoding()
                     break
 
                 frame: NnFrame = input
-                wait_frame_ready(frame=frame, cuda_stream=cuda_stream)
+                wait_frame_ready(frame=frame, stream=cuda_stream)
+                d_tensor = frame.tensor
 
-                d_img = tensor_to_img(tensor=frame.tensor, img_dtype=img_dtype)
+                if verbose:
+                    dlogger.debug(
+                        f"{purple(f"[V][E] Received no. {received}:")} {d_tensor.shape}, {d_tensor.dtype}, {d_tensor.data_ptr()}"
+                    )
+                    received += 1
+                d_img = tensor_to_img(tensor=d_tensor, img_dtype=img_dtype)
                 host_memories[i].copy_(d_img, non_blocking=True)
                 mark_frame_ready(frame=frame, stream=cuda_stream)
+
                 d2h_done[i] = frame.event
-                del frame
-
-
-                # Pendant que le D2H de la frame N tourne, on écrit la frame N-1
-                if pending is not None:
-                    write_pending(pending)
-                pending = i
+                pending.append(i)
                 i = (i + 1) % DEC_ENC_HOST_NBUFFERS
+                del frame, d_img
 
+                if len(pending) >= DEC_ENC_HOST_NBUFFERS:
+                    write_oldest()
+
+                remaining -= 1
                 self._encoded += 1
-                if self.progress_thread is not None:
-                    self.progress_thread.put(1)
 
                 # let the producer know that we're waiting for a new frame
                 if self.producer is not None:
                     self.producer.set_produce_flag()
-                # del frame
+
+            dlogger.info(
+                f"{purple(f"[V][E] ended")}"
+            )
+            while pending:
+                write_oldest()
 
         # No more frames to be received, wait until the end of the encoder
         self._processing = False

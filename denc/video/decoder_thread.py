@@ -120,17 +120,15 @@ class DecoderThread(BaseThread):
                 )
                 d_tensor = img_to_tensor(d_img=d_img, tensor_dtype=tensor_dtype)
 
-                event = torch.cuda.Event()
-                event.record(cuda_stream)
-                h2d_done[i] = event
-
                 # Create a frame object
                 frame: NnFrame = NnFrame(
                     f_no=f_no,
                     tensor=d_tensor.clone(),
                     last=bool(remaining == 1),
-                    event=event
                 )
+                mark_frame_ready(frame=frame, stream=cuda_stream)
+                h2d_done[i] = frame.event
+
                 if verbose:
                     print(
                         f"\n[V][D] ({lightcyan(f_index)}) ({f_no}), {remaining}. Tensor:",
