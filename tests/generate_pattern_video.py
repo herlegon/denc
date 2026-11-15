@@ -41,7 +41,7 @@ def main():
         type=float,
         default=40,
         required=False,
-        help="Duration in seconds, default: 60",
+        help="Duration in seconds, default: 40",
     )
     parser.add_argument(
         "--out_dir",
@@ -58,6 +58,19 @@ def main():
         required=False,
         help="Resolution",
     )
+    parser.add_argument(
+        "--codec",
+        "-c",
+        type=VideoCodec,
+        default=VideoCodec.DNXHR,
+        choices=list(VideoCodec),
+        metavar="CODEC",
+        required=False,
+        help=(
+            "Video codec (case-insensitive), default: %(default)s. "
+            "Choices: " + ", ".join(c.value for c in VideoCodec)
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -71,7 +84,7 @@ def main():
     # out_media.container = '.mxf'
     out_media.add_prop_suffix = True
     vstream = out_media.video
-    vstream.codec = VideoCodec.H265
+    vstream.codec = args.codec
     vstream.color.matrix = ColorSpace.BT709
     vstream.pix_fmt = PixFmt.YUV422P10
     vstream.frame_rate = FrameRate(25, 1)
