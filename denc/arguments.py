@@ -281,7 +281,17 @@ def add_inference_arguments(parser: ArgumentParser) -> None:
         required=False,
         default=False,
         help="""Use the first cuda device as the execution provider.
-Fallback to cpu if no CUDA device found.
+\n"""
+    )
+
+
+    parser.add_argument(
+        "--trt",
+        "-trt",
+        action="store_true",
+        required=False,
+        default=False,
+        help="""Use the first cuda device as the execution provider.
 \n"""
     )
 
